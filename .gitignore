@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+api/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test files
+test-certificate.pdf
+test_certificate.pdf
+
+# Build outputs
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Clarinet
+.cache/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# History and temporary files
+history.txt
+api/.env
