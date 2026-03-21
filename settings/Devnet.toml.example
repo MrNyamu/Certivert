@@ -1,0 +1,53 @@
+# Devnet Configuration Template
+# Copy this to Devnet.toml and update with your own mnemonics for production
+
+[network]
+name = "devnet"
+deployment_fee_rate = 10
+
+[accounts.deployer]
+mnemonic = "YOUR_DEPLOYER_MNEMONIC_HERE"
+balance = 100_000_000_000_000
+sbtc_balance = 1_000_000_000
+# secret_key: YOUR_SECRET_KEY_HERE
+# stx_address: YOUR_STX_ADDRESS_HERE
+# btc_address: YOUR_BTC_ADDRESS_HERE
+
+[accounts.wallet_1]
+mnemonic = "YOUR_WALLET_1_MNEMONIC_HERE"
+balance = 100_000_000_000_000
+sbtc_balance = 1_000_000_000
+# secret_key: YOUR_SECRET_KEY_HERE
+# stx_address: YOUR_STX_ADDRESS_HERE
+# btc_address: YOUR_BTC_ADDRESS_HERE
+
+[accounts.wallet_2]
+mnemonic = "YOUR_WALLET_2_MNEMONIC_HERE"
+balance = 100_000_000_000_000
+sbtc_balance = 1_000_000_000
+# secret_key: YOUR_SECRET_KEY_HERE
+# stx_address: YOUR_STX_ADDRESS_HERE
+# btc_address: YOUR_BTC_ADDRESS_HERE
+
+[accounts.wallet_3]
+mnemonic = "YOUR_WALLET_3_MNEMONIC_HERE"
+balance = 100_000_000_000_000
+sbtc_balance = 1_000_000_000
+# secret_key: YOUR_SECRET_KEY_HERE
+# stx_address: YOUR_STX_ADDRESS_HERE
+# btc_address: YOUR_BTC_ADDRESS_HERE
+
+# Add more wallets as needed...
+
+[accounts.faucet]
+mnemonic = "YOUR_FAUCET_MNEMONIC_HERE"
+balance = 100_000_000_000_000
+sbtc_balance = 1_000_000_000
+# secret_key: YOUR_SECRET_KEY_HERE
+# stx_address: YOUR_STX_ADDRESS_HERE
+# btc_address: YOUR_BTC_ADDRESS_HERE
+
+[devnet]
+disable_stacks_explorer = false
+disable_stacks_api = false
+# Add other devnet configuration as needed...
