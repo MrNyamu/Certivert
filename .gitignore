@@ -43,3 +43,4 @@ yarn-error.log*
 # History and temporary files
 history.txt
 api/.env
+api/.env*
