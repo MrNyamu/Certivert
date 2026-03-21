@@ -2,6 +2,8 @@
 
 Certivert is a blockchain-based academic certificate verification system for Kenyan universities. It prevents fraudulent academic credentials by anchoring certificate records immutably on the Stacks blockchain (Bitcoin Layer 2) and storing encrypted documents on IPFS.
 
+This project is in line with the strathmore school of computing and engineering sciences (sces) for the final year information systems project 2 of the course Bachelors Of Business Information Technology 2026
+
 ## 🏗️ Architecture
 
 ```
