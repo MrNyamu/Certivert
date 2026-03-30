@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@import "tailwindcss";
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities; */
+
+:root {
+  --cream:          #F5F0E8;
+  --cream-soft:     #EDE8DF;
+  --cream-border:   #D8D1C4;
+  --linen:          #FAF7F2;
+  --ink:            #1A1A18;
+  --ink-soft:       #2E2E2A;
+  --muted:          #7A7468;
+  --faint:          #B8B2A8;
+  --coral:          #C85C3C;
+  --coral-soft:     #F2E4DC;
+  --verified:       #1A6B47;
+  --verified-bg:    #EBF5EE;
+  --verified-deep:  #0E3D29;
+  --revoked:        #8B1A1A;
+  --revoked-bg:     #F5EBEB;
+  --amber:          #8B6914;
+  --amber-bg:       #F5F0E0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--cream);
+  color: var(--ink);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar — subtle, matches the warm palette */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--cream); }
+::-webkit-scrollbar-thumb { background: var(--cream-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
