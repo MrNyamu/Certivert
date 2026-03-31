@@ -6,6 +6,7 @@ api/node_modules/
 .env
 .env.local
 .env.*.local
+frontend/.env
 
 # Test files
 test-certificate.pdf
