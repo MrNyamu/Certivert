@@ -9,14 +9,14 @@ plan:
     transactions:
     - transaction-type: contract-publish
       contract-name: role-registry
-      expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      expected-sender: ST113F4B3AY86WZKDZ20SPZRSQN3QSSBSBSZPJ8P5
       cost: 22470
       path: contracts/role-registry.clar
       anchor-block-only: true
       clarity-version: 4
     - transaction-type: contract-publish
       contract-name: certificate-store
-      expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      expected-sender: ST113F4B3AY86WZKDZ20SPZRSQN3QSSBSBSZPJ8P5
       cost: 69900
       path: contracts/certificate-store.clar
       anchor-block-only: true

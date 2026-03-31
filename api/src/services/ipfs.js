@@ -3,7 +3,25 @@ import crypto from 'crypto';
 import { config } from '../config.js';
 
 // Create IPFS client instance
-const ipfs = create({ url: config.IPFS_API_URL });
+let ipfs = null;
+
+// Initialize IPFS client
+function initIPFSClient() {
+  if (!ipfs) {
+    ipfs = create({ url: config.IPFS_API_URL });
+  }
+  return ipfs;
+}
+
+// Clean up IPFS client
+export function closeIPFSClient() {
+  if (ipfs) {
+    // Note: kubo-rpc-client doesn't have explicit close method
+    // Setting to null allows garbage collection
+    ipfs = null;
+    console.log('IPFS client connections cleaned up');
+  }
+}
 
 /**
  * Encrypts data using AES-256-CBC
@@ -77,6 +95,7 @@ export async function uploadToIPFS(fileBuffer) {
       throw new Error('Input must be a Buffer');
     }
     
+    const client = initIPFSClient();
     console.log(`Uploading file to IPFS: ${fileBuffer.length} bytes`);
     
     // Encrypt the file buffer
@@ -84,7 +103,7 @@ export async function uploadToIPFS(fileBuffer) {
     console.log(`Encrypted file: ${encryptedBuffer.length} bytes (including IV)`);
     
     // Upload to IPFS
-    const result = await ipfs.add(encryptedBuffer, {
+    const result = await client.add(encryptedBuffer, {
       pin: true,  // Pin the file immediately
       cidVersion: 1
     });
@@ -110,11 +129,12 @@ export async function fetchFromIPFS(cid) {
       throw new Error('CID must be a non-empty string');
     }
     
+    const client = initIPFSClient();
     console.log(`Fetching file from IPFS: ${cid}`);
     
     // Collect chunks from IPFS
     const chunks = [];
-    for await (const chunk of ipfs.cat(cid)) {
+    for await (const chunk of client.cat(cid)) {
       chunks.push(chunk);
     }
     
@@ -143,8 +163,9 @@ export async function pinCID(cid) {
       throw new Error('CID must be a non-empty string');
     }
     
+    const client = initIPFSClient();
     console.log(`Pinning CID: ${cid}`);
-    await ipfs.pin.add(cid);
+    await client.pin.add(cid);
     console.log(`Successfully pinned: ${cid}`);
   } catch (error) {
     console.error('Error pinning CID:', error);
@@ -158,7 +179,8 @@ export async function pinCID(cid) {
  */
 export async function checkIPFSConnection() {
   try {
-    const nodeInfo = await ipfs.id();
+    const client = initIPFSClient();
+    const nodeInfo = await client.id();
     console.log(`Connected to IPFS node: ${nodeInfo.id}`);
     return true;
   } catch (error) {

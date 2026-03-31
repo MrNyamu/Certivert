@@ -17,7 +17,7 @@ export const config = {
   IPFS_API_URL: process.env.IPFS_API_URL || 'http://127.0.0.1:5001',
   
   // API configuration
-  API_PORT: process.env.API_PORT || 4000,
+  API_PORT: process.env.API_PORT || 3001,
   
   // Encryption configuration
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
