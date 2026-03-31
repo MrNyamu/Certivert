@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
-import { showConnect } from '@stacks/connect';
+import { connect, disconnect, isConnected as checkIsConnected, getLocalStorage } from '@stacks/connect';
 import { STACKS_MAINNET, STACKS_TESTNET, STACKS_DEVNET } from '@stacks/network';
-
-const appConfig = {
-  name: 'Certivert',
-  icon: '/favicon.ico',
-};
 
 export function useWallet() {
   const [address, setAddress] = useState(null);
@@ -26,32 +21,37 @@ export function useWallet() {
     }
   };
 
-  const connectWallet = () => {
+  const connectWallet = async () => {
     setIsConnecting(true);
     
-    showConnect({
-      appDetails: appConfig,
-      redirectTo: '/',
-      onFinish: (data) => {
-        const userSession = data.userSession;
-        const userData = userSession.loadUserData();
+    try {
+      // Use the new connect API
+      const response = await connect();
+      
+      if (response && response.addresses && response.addresses.length > 0) {
+        // Find the STX address
+        const stxAddress = response.addresses.find(addr => 
+          addr.symbol === 'STX' || addr.address.startsWith('S')
+        );
         
-        setAddress(userData.profile.stxAddress.mainnet);
-        setPublicKey(userData.profile.publicKey);
-        setIsConnected(true);
-        setIsConnecting(false);
-        
-        // Store in session
-        sessionStorage.setItem('wallet_address', userData.profile.stxAddress.mainnet);
-        sessionStorage.setItem('wallet_publicKey', userData.profile.publicKey);
-        
-        // Fetch user role from API
-        fetchUserRole(userData.profile.stxAddress.mainnet);
-      },
-      onCancel: () => {
-        setIsConnecting(false);
-      },
-    });
+        if (stxAddress) {
+          setAddress(stxAddress.address);
+          setPublicKey(stxAddress.publicKey || '');
+          setIsConnected(true);
+          
+          // Store in session storage
+          sessionStorage.setItem('wallet_address', stxAddress.address);
+          sessionStorage.setItem('wallet_publicKey', stxAddress.publicKey || '');
+          
+          // Fetch user role from API
+          fetchUserRole(stxAddress.address);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to connect wallet:', error);
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   const fetchUserRole = async (walletAddress) => {
@@ -70,7 +70,10 @@ export function useWallet() {
     }
   };
 
-  const disconnect = () => {
+  const disconnectWallet = () => {
+    // Use the official disconnect function
+    disconnect();
+    
     setAddress(null);
     setPublicKey(null);
     setIsConnected(false);
@@ -83,9 +86,30 @@ export function useWallet() {
 
   // Restore session on load
   useEffect(() => {
+    // Check if wallet was previously connected using the official method
+    const wasConnected = checkIsConnected();
+    
+    if (wasConnected) {
+      // Try to get addresses from local storage
+      const localData = getLocalStorage();
+      
+      if (localData && localData.addresses && localData.addresses.stx) {
+        const stxAddress = localData.addresses.stx[0];
+        if (stxAddress) {
+          setAddress(stxAddress.address);
+          setPublicKey(stxAddress.publicKey || '');
+          setIsConnected(true);
+          
+          // Re-verify role from API
+          fetchUserRole(stxAddress.address);
+          return;
+        }
+      }
+    }
+    
+    // Fallback to session storage
     const savedAddress = sessionStorage.getItem('wallet_address');
     const savedPublicKey = sessionStorage.getItem('wallet_publicKey');
-    const savedRole = sessionStorage.getItem('user_role');
     
     if (savedAddress && savedPublicKey) {
       setAddress(savedAddress);
@@ -109,7 +133,7 @@ export function useWallet() {
     isConnecting,
     role,
     connectWallet,
-    disconnect,
+    disconnect: disconnectWallet,
     truncateAddress,
     network: getNetwork()
   };
