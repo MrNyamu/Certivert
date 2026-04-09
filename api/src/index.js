@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { checkIPFSConnection, closeIPFSClient } from './services/ipfs.js';
+import { getBlockchainStatus } from './services/blockchain.js';
 
 // Import routes
 import issueRouter from './routes/issue.js';
@@ -54,27 +55,43 @@ app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
-    // Check IPFS connection
-    const ipfsConnected = await checkIPFSConnection();
+    // Run health checks in parallel
+    const [ipfsConnected, blockchainStatus] = await Promise.all([
+      checkIPFSConnection(),
+      getBlockchainStatus()
+    ]);
+    
+    // Determine overall health
+    const isHealthy = ipfsConnected && blockchainStatus.status === 'healthy';
     
     const healthStatus = {
-      status: 'ok',
+      status: isHealthy ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       services: {
         api: 'healthy',
-        ipfs: ipfsConnected ? 'healthy' : 'unhealthy',
-        blockchain: 'unknown' // TODO: Add Stacks node health check
+        ipfs: {
+          status: ipfsConnected ? 'healthy' : 'unhealthy',
+          connected: ipfsConnected
+        },
+        blockchain: {
+          status: blockchainStatus.status,
+          ...blockchainStatus.details
+        }
       },
-      version: '1.0.0'
+      version: '1.0.0',
+      network: config.STACKS_NETWORK,
+      contractAddress: config.CONTRACT_ADDRESS
     };
     
-    const statusCode = ipfsConnected ? 200 : 503;
+    const statusCode = isHealthy ? 200 : 503;
     res.status(statusCode).json(healthStatus);
   } catch (error) {
+    console.error('Health check error:', error);
     res.status(503).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      message: 'Health check failed'
+      message: 'Health check failed',
+      error: error.message
     });
   }
 });

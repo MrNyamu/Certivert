@@ -1,7 +1,7 @@
 import StacksTransactions from '@stacks/transactions';
 const {
   makeContractCall,
-  makeReadOnlyContractCall,
+  fetchCallReadOnlyFunction,
   broadcastTransaction,
   stringAsciiCV,
   principalCV,
@@ -39,6 +39,25 @@ export async function proposeCertificate(certId, certData, ipfsCid, signerKey) {
     const network = getNetwork();
     
     console.log(`Proposing certificate: ${certId}`);
+    console.log(`Using signer key: ${signerKey ? 'PROVIDED' : 'MISSING'}`);
+    
+    // Validate private key format
+    if (!signerKey) {
+      throw new Error('Private key is required but not provided');
+    }
+    
+    if (typeof signerKey !== 'string') {
+      throw new Error('Private key must be a string');
+    }
+    
+    // Remove 0x prefix if present and validate hex format
+    const cleanKey = signerKey.startsWith('0x') ? signerKey.slice(2) : signerKey;
+    if (cleanKey.length !== 64 || !/^[a-fA-F0-9]+$/.test(cleanKey)) {
+      console.error(`Invalid private key format. Length: ${cleanKey.length}, Valid hex: ${/^[a-fA-F0-9]+$/.test(cleanKey)}`);
+      throw new Error('Private key must be 64 character hex string');
+    }
+    
+    console.log(`Private key validation: PASSED (length: ${cleanKey.length})`);
     
     const txOptions = {
       contractAddress: config.CONTRACT_ADDRESS,
@@ -61,12 +80,109 @@ export async function proposeCertificate(certId, certData, ipfsCid, signerKey) {
     };
     
     const transaction = await makeContractCall(txOptions);
-    const result = await broadcastTransaction(transaction, network);
     
-    console.log(`Propose transaction broadcast: ${result.txid}`);
-    return result.txid;
+    // Validate transaction object before broadcasting
+    console.log(`Transaction object type: ${typeof transaction}`);
+    console.log(`Transaction object keys:`, transaction ? Object.keys(transaction) : 'NONE');
+    console.log(`Has serialize method: ${transaction && typeof transaction.serialize === 'function'}`);
+    
+    if (!transaction) {
+      console.error('Transaction is null/undefined:', {
+        transaction: transaction,
+        senderKey: signerKey ? 'PROVIDED' : 'MISSING',
+        txOptions: { ...txOptions, senderKey: 'REDACTED' }
+      });
+      throw new Error('makeContractCall returned null/undefined transaction');
+    }
+    
+    if (typeof transaction.serialize !== 'function') {
+      console.error('Transaction missing serialize method:', {
+        transaction: transaction,
+        transactionType: typeof transaction,
+        transactionKeys: Object.keys(transaction),
+        senderKey: signerKey ? 'PROVIDED' : 'MISSING',
+        txOptions: { ...txOptions, senderKey: 'REDACTED' }
+      });
+      throw new Error('Transaction object is missing serialize method');
+    }
+    
+    console.log(`Transaction created successfully for cert: ${certId}`);
+    console.log(`About to broadcast transaction with network: ${network?.coreApiUrl}`);
+    
+    // Add comprehensive debugging
+    console.log('Network details:', {
+      coreApiUrl: network?.coreApiUrl,
+      broadcastEndpoint: network?.broadcastEndpoint,
+      transferFeeEstimateEndpoint: network?.transferFeeEstimateEndpoint
+    });
+    
+    console.log('Transaction details:', {
+      hasSerialize: typeof transaction.serialize === 'function',
+      txType: transaction.payload?.payloadType || 'unknown'
+    });
+    
+    // Log the serialized transaction for debugging
+    try {
+      const serializedTx = transaction.serialize();
+      console.log(`Serialized transaction length: ${serializedTx.length} bytes`);
+      console.log(`Serialized transaction (first 100 chars): ${serializedTx.toString('hex').substring(0, 100)}...`);
+    } catch (serErr) {
+      console.error('Failed to serialize transaction for debugging:', serErr.message);
+    }
+    
+    const result = await broadcastTransaction({ 
+      transaction, 
+      network 
+    });
+    
+    console.log(`Broadcast result:`, result);
+    console.log(`Broadcast result type:`, typeof result);
+    console.log(`Broadcast result keys:`, result ? Object.keys(result) : 'NONE');
+    
+    // If result is a string, it might be the transaction ID directly
+    // If result is an object, look for common properties
+    let txId = null;
+    if (typeof result === 'string') {
+      txId = result;
+    } else if (result?.txid) {
+      txId = result.txid;
+    } else if (result?.txId) {
+      txId = result.txId;
+    } else if (result?.transaction_id) {
+      txId = result.transaction_id;
+    } else if (result?.result) {
+      txId = result.result;
+    }
+    
+    console.log(`Extracted transaction ID: ${txId}`);
+    console.log(`Propose transaction broadcast: ${txId}`);
+    
+    // Verify transaction was actually broadcast by checking mempool
+    if (txId) {
+      setTimeout(async () => {
+        try {
+          const mempoolCheck = await fetch(`${network.coreApiUrl}/extended/v1/tx/mempool?limit=50`);
+          if (mempoolCheck.ok) {
+            const mempool = await mempoolCheck.json();
+            const foundInMempool = mempool.results?.some(tx => tx.tx_id === txId || tx.tx_id === `0x${txId}`);
+            console.log(`Transaction ${txId} found in mempool: ${foundInMempool}`);
+          }
+        } catch (e) {
+          console.log('Failed to check mempool:', e.message);
+        }
+      }, 1000); // Check after 1 second
+    }
+    
+    return txId;
   } catch (error) {
     console.error('Error proposing certificate:', error);
+    const currentNetwork = getNetwork();
+    console.error('Detailed error context:', {
+      certId,
+      signerKey: signerKey ? 'PROVIDED' : 'MISSING',
+      network: currentNetwork?.coreApiUrl || 'UNKNOWN',
+      error: error.message
+    });
     throw new Error(`Failed to propose certificate: ${error.message}`);
   }
 }
@@ -82,6 +198,25 @@ export async function approveCertificate(certId, signer2Key) {
     const network = getNetwork();
     
     console.log(`Approving certificate: ${certId}`);
+    console.log(`Using signer2 key: ${signer2Key ? 'PROVIDED' : 'MISSING'}`);
+    
+    // Validate private key format
+    if (!signer2Key) {
+      throw new Error('Signer2 private key is required but not provided');
+    }
+    
+    if (typeof signer2Key !== 'string') {
+      throw new Error('Signer2 private key must be a string');
+    }
+    
+    // Remove 0x prefix if present and validate hex format
+    const cleanKey = signer2Key.startsWith('0x') ? signer2Key.slice(2) : signer2Key;
+    if (cleanKey.length !== 64 || !/^[a-fA-F0-9]+$/.test(cleanKey)) {
+      console.error(`Invalid signer2 private key format. Length: ${cleanKey.length}, Valid hex: ${/^[a-fA-F0-9]+$/.test(cleanKey)}`);
+      throw new Error('Signer2 private key must be 64 character hex string');
+    }
+    
+    console.log(`Signer2 private key validation: PASSED (length: ${cleanKey.length})`);
     
     const txOptions = {
       contractAddress: config.CONTRACT_ADDRESS,
@@ -95,12 +230,38 @@ export async function approveCertificate(certId, signer2Key) {
     };
     
     const transaction = await makeContractCall(txOptions);
-    const result = await broadcastTransaction(transaction, network);
     
-    console.log(`Approve transaction broadcast: ${result.txid}`);
-    return result.txid;
+    // Validate transaction object before broadcasting
+    if (!transaction || typeof transaction.serialize !== 'function') {
+      console.error('Invalid transaction object:', {
+        transaction: transaction,
+        signer2Key: signer2Key ? 'PROVIDED' : 'MISSING',
+        txOptions: { ...txOptions, senderKey: 'REDACTED' }
+      });
+      throw new Error('Failed to create valid transaction object - check signer2Key and network configuration');
+    }
+    
+    console.log(`Approve transaction created successfully for cert: ${certId}`);
+    
+    const result = await broadcastTransaction({ 
+      transaction, 
+      network 
+    });
+    
+    console.log(`Approve broadcast result:`, result);
+    console.log(`Approve broadcast result type:`, typeof result);
+    console.log(`Approve broadcast result keys:`, result ? Object.keys(result) : 'NONE');
+    console.log(`Approve transaction broadcast: ${result.txid || result}`);
+    return result.txid || result;
   } catch (error) {
     console.error('Error approving certificate:', error);
+    const currentNetwork = getNetwork();
+    console.error('Detailed error context:', {
+      certId,
+      signer2Key: signer2Key ? 'PROVIDED' : 'MISSING',
+      network: currentNetwork?.coreApiUrl || 'UNKNOWN',
+      error: error.message
+    });
     throw new Error(`Failed to approve certificate: ${error.message}`);
   }
 }
@@ -129,7 +290,10 @@ export async function revokeCertificate(certId, callerKey) {
     };
     
     const transaction = await makeContractCall(txOptions);
-    const result = await broadcastTransaction(transaction, network);
+    const result = await broadcastTransaction({ 
+      transaction, 
+      network 
+    });
     
     console.log(`Revoke transaction broadcast: ${result.txid}`);
     return result.txid;
@@ -159,17 +323,44 @@ export async function verifyCertificate(certId) {
       senderAddress: config.CONTRACT_ADDRESS
     };
     
-    const result = await makeReadOnlyContractCall(options);
+    const result = await fetchCallReadOnlyFunction(options);
     
-    // Parse the result
-    if (result.type === 'tuple') {
-      const status = result.data.status?.data || 'UNKNOWN';
-      const certificate = result.data.certificate?.type === 'none' 
-        ? null 
-        : parseCertificateData(result.data.certificate.value);
+    console.log(`Read-only function result:`, result);
+    console.log(`Result type:`, typeof result);
+    console.log(`Result keys:`, result ? Object.keys(result) : 'NONE');
+    
+    // fetchCallReadOnlyFunction returns the result directly, not wrapped
+    // Check if result has the expected structure
+    if (result && typeof result === 'object') {
+      // Handle the response structure from fetchCallReadOnlyFunction
+      let actualData = result;
       
-      console.log(`Certificate verification result: ${status}`);
-      return { status, certificate };
+      // If result has a 'result' property, use that
+      if (result.result) {
+        actualData = result.result;
+      }
+      
+      // Check if actualData has the tuple structure we expect
+      if (actualData && actualData.type === 'tuple' && actualData.data) {
+        const status = actualData.data.status?.data || 'UNKNOWN';
+        const certificate = actualData.data.certificate?.type === 'none' 
+          ? null 
+          : parseCertificateData(actualData.data.certificate.value);
+        
+        console.log(`Certificate verification result: ${status}`);
+        return { status, certificate };
+      }
+      
+      // If it's a direct tuple response
+      if (actualData.status && actualData.certificate !== undefined) {
+        const status = actualData.status || 'UNKNOWN';
+        const certificate = actualData.certificate === null 
+          ? null 
+          : parseCertificateData(actualData.certificate);
+        
+        console.log(`Certificate verification result (direct): ${status}`);
+        return { status, certificate };
+      }
     }
     
     throw new Error('Unexpected response format from contract');
@@ -199,7 +390,7 @@ export async function getPendingTx(certId) {
       senderAddress: config.CONTRACT_ADDRESS
     };
     
-    const result = await makeReadOnlyContractCall(options);
+    const result = await fetchCallReadOnlyFunction(options);
     
     if (result.type === 'none') {
       return null;

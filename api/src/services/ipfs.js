@@ -2,6 +2,8 @@ import { create } from 'kubo-rpc-client';
 import crypto from 'crypto';
 import { config } from '../config.js';
 
+
+
 // Create IPFS client instance
 let ipfs = null;
 
@@ -188,3 +190,17 @@ export async function checkIPFSConnection() {
     return false;
   }
 }
+
+
+
+ export async function closeIPFSClient() {
+      try {
+       if (ipfs && typeof ipfs.stop === 'function') {
+       await ipfs.stop();
+       console.log('IPFS client connection closed');
+    }
+      } catch (error) {
+    console.error('Error closing IPFS client:', error);
+       }
+
+  }
