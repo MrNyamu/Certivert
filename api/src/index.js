@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { checkIPFSConnection } from './services/ipfs.js';
+import { checkIPFSConnection, closeIPFSClient } from './services/ipfs.js';
 
 // Import routes
 import issueRouter from './routes/issue.js';
@@ -107,6 +107,9 @@ app.use(notFoundHandler);
 // Global error handler (must be last)
 app.use(errorHandler);
 
+// Server instance reference for graceful shutdown
+let server = null;
+
 // Start server
 async function startServer() {
   try {
@@ -117,7 +120,7 @@ async function startServer() {
       console.warn('Please ensure IPFS is running on', config.IPFS_API_URL);
     }
     
-    app.listen(config.API_PORT, () => {
+    server = app.listen(config.API_PORT, () => {
       console.log('='.repeat(60));
       console.log('🚀 Certivert API Server Started');
       console.log('='.repeat(60));
@@ -135,21 +138,104 @@ async function startServer() {
       console.log(`   GET  http://localhost:${config.API_PORT}/health`);
       console.log('='.repeat(60));
     });
+
+    // Handle server startup errors
+    server.on('error', (err) => {
+      server = null; // Reset server reference on error
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${config.API_PORT} is already in use. Please:`);
+        console.error('   1. Kill the existing process using the port');
+        console.error('   2. Change API_PORT in your .env file');
+        console.error('   3. Use: lsof -ti:3001 | xargs kill');
+      } else {
+        console.error('Server startup error:', err);
+      }
+      process.exit(1);
+    });
+
+    // Set server timeout to prevent hanging connections
+    server.keepAliveTimeout = 60000; // 60 seconds
+    server.headersTimeout = 65000;   // 65 seconds (should be higher than keepAliveTimeout)
+    
   } catch (error) {
     console.error('Failed to start server:', error);
+    server = null; // Ensure server reference is null on error
     process.exit(1);
   }
 }
 
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  process.exit(0);
+// Graceful shutdown function
+async function gracefulShutdown(signal) {
+  console.log(`${signal} received. Initiating graceful shutdown...`);
+  
+  // Clean up IPFS client connections
+  console.log('Cleaning up IPFS client...');
+  closeIPFSClient();
+  
+  if (server) {
+    console.log('Closing HTTP server...');
+    
+    // Close the server to stop accepting new connections
+    server.close((err) => {
+      if (err) {
+        console.error('Error closing HTTP server:', err);
+        process.exit(1);
+      }
+      
+      console.log('HTTP server closed successfully.');
+      
+      // Force exit after 10 seconds if process doesn't exit naturally
+      setTimeout(() => {
+        console.warn('Forcing process exit after 10 seconds...');
+        process.exit(0);
+      }, 10000);
+      
+      // Exit gracefully once all connections are closed
+      process.exit(0);
+    });
+    
+    // Immediately destroy all active connections to prevent hanging
+    setTimeout(() => {
+      console.log('Destroying remaining connections...');
+      server.closeAllConnections?.();
+    }, 5000);
+  } else {
+    console.log('No server instance found. Exiting immediately.');
+    process.exit(0);
+  }
+}
+
+// Handle graceful shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions to prevent hanging
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  
+  // Only attempt graceful shutdown if server is running
+  if (server && server.listening) {
+    gracefulShutdown('UNCAUGHT_EXCEPTION');
+  } else {
+    // If no server or server not listening, just clean up IPFS and exit
+    console.log('Server not running, cleaning up and exiting...');
+    closeIPFSClient();
+    process.exit(1);
+  }
 });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
-  process.exit(0);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  
+  // Only attempt graceful shutdown if server is running
+  if (server && server.listening) {
+    gracefulShutdown('UNHANDLED_REJECTION');
+  } else {
+    // If no server or server not listening, just clean up IPFS and exit
+    console.log('Server not running, cleaning up and exiting...');
+    closeIPFSClient();
+    process.exit(1);
+  }
 });
 
 // Start the server
