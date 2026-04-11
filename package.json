@@ -11,7 +11,11 @@
     "dev:api": "cd api && node src/index.js",
     "dev:frontend": "cd frontend && npm run dev",
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
-    "check": "clarinet check"
+    "check": "clarinet check",
+    "clarinet:stop": "docker stop $(docker ps -q --filter \"name=certivert.devnet\")",
+    "clarinet:wipe": "docker volume rm $(docker volume ls -q --filter \"name=certivert\")",
+    "clarinet:clear:cache": "rm -rf ~/Documents/Developer/Github/certivert/certivert/.cache",
+    "clarinet:dev": "clarinet devnet start"
   },
   "author": "",
   "license": "ISC",

@@ -17,14 +17,19 @@ export const config = {
   IPFS_API_URL: process.env.IPFS_API_URL || 'http://127.0.0.1:5001',
   
   // API configuration
-  API_PORT: process.env.API_PORT || 3001,
+  API_PORT: process.env.API_PORT || 3005,
   
   // Encryption configuration
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
   
   // Private keys (devnet keys for prototype)
   DEPLOYER_PRIVATE_KEY: process.env.DEPLOYER_PRIVATE_KEY || '753b7cc01a1a2e86221266a154af739463fce51219d97e4f856cd7200c3d7ac5',
-  SIGNER_2_PRIVATE_KEY: process.env.SIGNER_2_PRIVATE_KEY || '7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61efef9f6c27'
+  SIGNER_2_PRIVATE_KEY: process.env.SIGNER_2_PRIVATE_KEY || '7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61efef9f6c27',
+  
+  // Role addresses (devnet addresses for prototype)
+  UNIVERSITY_ADDRESS: process.env.UNIVERSITY_ADDRESS || 'STMZJQSVM24PWW7Q4562MV12011KGZXH0ANQFAQ1',
+  KNQA_ADDRESS: process.env.KNQA_ADDRESS || 'ST3TF2B73R3QVZDF9Z0KE1SR2X3HKZXS6E7R50AW0',
+  STUDENT_ADDRESS: process.env.STUDENT_ADDRESS || 'ST2PQ4A83VMAER0GV9MEZQDKGS87F718CNVW91QZ7'
 };
 
 // Validate required environment variables
