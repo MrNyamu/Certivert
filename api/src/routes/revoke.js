@@ -83,7 +83,15 @@ router.post('/', async (req, res, next) => {
     res.status(200).json(response);
     
   } catch (error) {
-    console.error('Error in certificate revocation:', error);
+    // In test environment, use console.log to avoid red error output and exclude stack trace
+    const logMethod = process.env.NODE_ENV === 'test' ? console.log : console.error;
+    const logPrefix = process.env.NODE_ENV === 'test' ? '[TEST ERROR] Certificate revocation:' : 'Error in certificate revocation:';
+    
+    if (process.env.NODE_ENV === 'test') {
+      logMethod(logPrefix, error.message);
+    } else {
+      logMethod(logPrefix, error);
+    }
     
     // Handle specific error types
     if (error.message.includes('not authorized') || error.message.includes('ERR-NOT-AUTHORISED')) {

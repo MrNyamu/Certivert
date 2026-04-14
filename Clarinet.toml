@@ -14,6 +14,11 @@ path = "contracts/certificate-store.clar"
 epoch = "latest"
 depends_on = ["role-registry"]
 
+[contracts.certificate-governance]
+path = "contracts/certificate-governance.clar"
+epoch = "latest"
+depends_on = []
+
 # Check-checker settings:
 # trusted_sender: if true, inputs are trusted after tx_sender has been checked.
 # trusted_caller: if true, inputs are trusted after contract-caller has been checked.

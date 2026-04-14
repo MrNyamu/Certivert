@@ -1,8 +1,9 @@
 export default {
   testEnvironment: 'node',
-  transform: {
-    '^.+\\.js$': 'babel-jest',
-  },
+  transformIgnorePatterns: [
+    'node_modules/(?!(kubo-rpc-client|ipfs-core-utils|multiformats|@multiformats|uint8arrays)/)'
+  ],
+  transform: {},
   testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
   collectCoverageFrom: [
     'src/**/*.js',
@@ -11,6 +12,5 @@ export default {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testTimeout: 10000,
 };

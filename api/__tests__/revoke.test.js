@@ -1,38 +1,70 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import revokeRouter from '../src/routes/revoke.js';
 
-// Mock dependencies
-jest.mock('../src/services/contractFactory.js');
-import { getCachedContractService } from '../src/services/contractFactory.js';
-
-// Create test app
-const app = express();
-app.use(express.json());
-app.use('/api/revoke', revokeRouter);
-
-// Mock contract service
-const mockContractService = {
-  revokeCertificate: jest.fn(),
-  getKeyByRole: jest.fn(),
-};
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  getCachedContractService.mockResolvedValue(mockContractService);
-  mockContractService.getKeyByRole.mockReturnValue('test-private-key');
-});
+// Mock functions
+const getCachedContractService = jest.fn();
+const isValidHash = jest.fn();
 
 describe('POST /api/revoke', () => {
+  let app;
+  let revokeRouter;
+  let mockContractService;
+
+  beforeAll(async () => {
+    // Create mocks using unstable_mockModule
+    await jest.unstable_mockModule('../src/services/contractFactory.js', () => ({
+      getCachedContractService
+    }));
+
+    await jest.unstable_mockModule('../src/services/hash.js', () => ({
+      computeCertHash: jest.fn(),
+      computeFileHash: jest.fn(),
+      isValidHash
+    }));
+
+    // Import the router after mocking
+    const { default: router } = await import('../src/routes/revoke.js');
+    revokeRouter = router;
+
+    // Import error handler
+    const { errorHandler } = await import('../src/middleware/errorHandler.js');
+
+    // Create test app
+    app = express();
+    app.use(express.json());
+    app.use('/api/revoke', revokeRouter);
+    app.use(errorHandler); // Add error handler middleware
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    // Mock contract service
+    mockContractService = {
+      revokeCertificate: jest.fn(),
+      verifyCertificate: jest.fn(),
+      getKeyByRole: jest.fn(),
+    };
+
+    getCachedContractService.mockResolvedValue(mockContractService);
+    mockContractService.getKeyByRole.mockReturnValue('test-private-key');
+    isValidHash.mockReturnValue(true); // Default to valid hash format
+  });
+
   const validCertId = 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456';
   const validRevokeData = {
     certId: validCertId,
-    reason: 'Academic misconduct discovered',
-    revokerRole: 'university'
+    callerRole: 'university'  // Using callerRole not revokerRole
   };
 
   describe('Successful revocation', () => {
     test('should revoke certificate with university role', async () => {
+      // Mock certificate verification (certificate exists and not revoked)
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'VALID',
+        certificate: { studentName: 'John Doe' }
+      });
       mockContractService.revokeCertificate.mockResolvedValue('revoke-tx-id-123');
 
       const response = await request(app)
@@ -44,11 +76,11 @@ describe('POST /api/revoke', () => {
         certId: validCertId,
         txId: 'revoke-tx-id-123',
         status: 'revoked',
-        reason: 'Academic misconduct discovered',
         revokedBy: 'university',
         message: 'Certificate revoked successfully'
       });
 
+      expect(mockContractService.verifyCertificate).toHaveBeenCalledWith(validCertId);
       expect(mockContractService.revokeCertificate).toHaveBeenCalledWith(
         validCertId,
         'test-private-key'
@@ -56,7 +88,12 @@ describe('POST /api/revoke', () => {
     });
 
     test('should revoke certificate with KNQA role', async () => {
-      const knqaRevokeData = { ...validRevokeData, revokerRole: 'knqa' };
+      const knqaRevokeData = { ...validRevokeData, callerRole: 'knqa' };
+      
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'VALID',
+        certificate: { studentName: 'Jane Doe' }
+      });
       mockContractService.revokeCertificate.mockResolvedValue('revoke-tx-id-456');
 
       const response = await request(app)
@@ -73,26 +110,6 @@ describe('POST /api/revoke', () => {
 
       expect(mockContractService.getKeyByRole).toHaveBeenCalledWith('knqa');
     });
-
-    test('should handle revocation without reason', async () => {
-      const dataWithoutReason = {
-        certId: validCertId,
-        revokerRole: 'university'
-      };
-      
-      mockContractService.revokeCertificate.mockResolvedValue('revoke-tx-id-789');
-
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(dataWithoutReason);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({
-        certId: validCertId,
-        status: 'revoked',
-        reason: 'No reason provided'
-      });
-    });
   });
 
   describe('Validation errors', () => {
@@ -100,54 +117,53 @@ describe('POST /api/revoke', () => {
       const response = await request(app)
         .post('/api/revoke')
         .send({
-          reason: 'Test reason',
-          revokerRole: 'university'
+          callerRole: 'university'
         });
 
       expect(response.status).toBe(400);
       expect(response.body).toMatchObject({
-        error: 'Certificate ID is required',
-        code: 'MISSING_CERT_ID'
+        error: 'Missing required fields: certId and callerRole',
+        code: 'MISSING_FIELDS'
       });
     });
 
-    test('should return 400 if revokerRole is missing', async () => {
+    test('should return 400 if callerRole is missing', async () => {
+      const response = await request(app)
+        .post('/api/revoke')
+        .send({
+          certId: validCertId
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({
+        error: 'Missing required fields: certId and callerRole',
+        code: 'MISSING_FIELDS'
+      });
+    });
+
+    test('should return 400 if callerRole is invalid', async () => {
       const response = await request(app)
         .post('/api/revoke')
         .send({
           certId: validCertId,
-          reason: 'Test reason'
+          callerRole: 'student'  // Invalid role
         });
 
       expect(response.status).toBe(400);
       expect(response.body).toMatchObject({
-        error: 'Revoker role is required',
-        code: 'MISSING_REVOKER_ROLE'
-      });
-    });
-
-    test('should return 400 if revokerRole is invalid', async () => {
-      const response = await request(app)
-        .post('/api/revoke')
-        .send({
-          certId: validCertId,
-          reason: 'Test reason',
-          revokerRole: 'student'  // Invalid role
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Invalid revoker role. Must be university or knqa',
-        code: 'INVALID_REVOKER_ROLE'
+        error: 'Invalid caller role. Must be "university" or "knqa"',
+        code: 'INVALID_ROLE'
       });
     });
 
     test('should return 400 for invalid certId format', async () => {
+      isValidHash.mockReturnValue(false); // Mock invalid hash
+
       const response = await request(app)
         .post('/api/revoke')
         .send({
           certId: 'invalid-cert-id',
-          revokerRole: 'university'
+          callerRole: 'university'
         });
 
       expect(response.status).toBe(400);
@@ -155,12 +171,17 @@ describe('POST /api/revoke', () => {
         error: 'Invalid certificate ID format',
         code: 'INVALID_CERT_ID'
       });
+
+      expect(isValidHash).toHaveBeenCalledWith('invalid-cert-id');
     });
   });
 
   describe('Business logic errors', () => {
     test('should handle certificate not found', async () => {
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('Certificate not found'));
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'NOT_FOUND',
+        certificate: null
+      });
 
       const response = await request(app)
         .post('/api/revoke')
@@ -174,7 +195,10 @@ describe('POST /api/revoke', () => {
     });
 
     test('should handle already revoked certificate', async () => {
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('Certificate already revoked'));
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'REVOKED',
+        certificate: { studentName: 'John Doe' }
+      });
 
       const response = await request(app)
         .post('/api/revoke')
@@ -188,7 +212,11 @@ describe('POST /api/revoke', () => {
     });
 
     test('should handle unauthorized revocation attempt', async () => {
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('Not authorized to revoke'));
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'VALID',
+        certificate: { studentName: 'John Doe' }
+      });
+      mockContractService.revokeCertificate.mockRejectedValue(new Error('not authorized'));
 
       const response = await request(app)
         .post('/api/revoke')
@@ -204,7 +232,11 @@ describe('POST /api/revoke', () => {
 
   describe('Service failures', () => {
     test('should handle blockchain service failure', async () => {
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('Blockchain connection failed'));
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'VALID',
+        certificate: { studentName: 'John Doe' }
+      });
+      mockContractService.revokeCertificate.mockRejectedValue(new Error('blockchain connection failed'));
 
       const response = await request(app)
         .post('/api/revoke')
@@ -218,7 +250,11 @@ describe('POST /api/revoke', () => {
     });
 
     test('should handle contract transaction failure', async () => {
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('Transaction failed'));
+      mockContractService.verifyCertificate.mockResolvedValue({
+        status: 'VALID',
+        certificate: { studentName: 'John Doe' }
+      });
+      mockContractService.revokeCertificate.mockRejectedValue(new Error('contract'));
 
       const response = await request(app)
         .post('/api/revoke')

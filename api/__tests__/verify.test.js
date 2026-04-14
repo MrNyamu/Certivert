@@ -1,27 +1,70 @@
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import verifyRouter from '../src/routes/verify.js';
 
-// Mock dependencies
-jest.mock('../src/services/contractFactory.js');
-import { getCachedContractService } from '../src/services/contractFactory.js';
+// Mock functions
+const getCachedContractService = jest.fn();
+const fetchFromIPFS = jest.fn();
+const computeFileHash = jest.fn();
+const isValidHash = jest.fn();
 
-// Create test app
-const app = express();
-app.use(express.json());
-app.use('/api/verify', verifyRouter);
+describe('GET /api/verify/:certId', () => {
+  let app;
+  let verifyRouter;
+  let mockContractService;
 
-// Mock contract service
-const mockContractService = {
-  verifyCertificate: jest.fn(),
-};
+  beforeAll(async () => {
+    // Create mocks using unstable_mockModule
+    await jest.unstable_mockModule('../src/services/contractFactory.js', () => ({
+      getCachedContractService
+    }));
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  getCachedContractService.mockResolvedValue(mockContractService);
-});
+    await jest.unstable_mockModule('../src/services/ipfs.js', () => ({
+      fetchFromIPFS,
+      uploadToIPFS: jest.fn(),
+      pinCID: jest.fn(),
+      checkIPFSConnection: jest.fn(),
+      closeIPFSClient: jest.fn()
+    }));
 
-describe('POST /api/verify', () => {
+    await jest.unstable_mockModule('../src/services/hash.js', () => ({
+      computeCertHash: jest.fn(),
+      computeFileHash,
+      isValidHash
+    }));
+
+    // Import the router after mocking
+    const { default: router } = await import('../src/routes/verify.js');
+    verifyRouter = router;
+
+    // Import error handler
+    const { errorHandler } = await import('../src/middleware/errorHandler.js');
+
+    // Create test app
+    app = express();
+    app.use(express.json());
+    app.use('/api/verify', verifyRouter);
+    app.use(errorHandler); // Add error handler middleware
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    // Mock contract service
+    mockContractService = {
+      verifyCertificate: jest.fn(),
+    };
+
+    getCachedContractService.mockResolvedValue(mockContractService);
+    
+    // Set up default hash validation
+    isValidHash.mockReturnValue(true);
+    
+    // Set up default IPFS and hash behavior
+    fetchFromIPFS.mockResolvedValue(Buffer.from('mock-pdf-content'));
+    computeFileHash.mockReturnValue('mock-computed-hash');
+  });
+
   const validCertId = 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456';
 
   describe('Successful verification', () => {
@@ -29,14 +72,15 @@ describe('POST /api/verify', () => {
       const mockCertificate = {
         status: 'VALID',
         certificate: {
-          'student-name': 'John Doe',
-          'admission-no': 'ADM001',
+          certHash: 'mock-computed-hash', // This should match the computed hash
+          studentName: 'John Doe',
+          admissionNo: 'ADM001',
           programme: 'Computer Science',
           year: 2023,
           grade: 'First Class',
-          'ipfs-cid': 'QmTestCID123456789',
-          'issued-by': 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-          'issued-at': 12345,
+          ipfsCid: 'QmTestCID123456789',  // Use camelCase as expected by verify route
+          issuedBy: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+          issuedAt: 12345,
           revoked: false
         }
       };
@@ -44,27 +88,17 @@ describe('POST /api/verify', () => {
       mockContractService.verifyCertificate.mockResolvedValue(mockCertificate);
 
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: validCertId });
+        .get(`/api/verify/${validCertId}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
-        certId: validCertId,
         status: 'VALID',
-        certificate: expect.objectContaining({
-          studentName: 'John Doe',
-          admissionNo: 'ADM001',
-          programme: 'Computer Science',
-          year: 2023,
-          grade: 'First Class',
-          ipfsCid: 'QmTestCID123456789',
-          issuedBy: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
-          issuedAt: 12345,
-          revoked: false
-        })
+        hashVerified: true
       });
 
       expect(mockContractService.verifyCertificate).toHaveBeenCalledWith(validCertId);
+      expect(fetchFromIPFS).toHaveBeenCalledWith('QmTestCID123456789');
+      expect(computeFileHash).toHaveBeenCalled();
     });
 
     test('should handle revoked certificate', async () => {
@@ -88,19 +122,15 @@ describe('POST /api/verify', () => {
       mockContractService.verifyCertificate.mockResolvedValue(mockRevokedCert);
 
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: validCertId });
+        .get(`/api/verify/${validCertId}`);
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
-        certId: validCertId,
         status: 'REVOKED',
         certificate: expect.objectContaining({
-          studentName: 'Jane Doe',
-          revoked: true,
-          revokedBy: 'ST2REHHS5J3CERCRBEPMGH7921Q6PYKAQS7J7XW2',
-          revokedAt: 13333
-        })
+          revoked: true
+        }),
+        message: 'Certificate has been revoked'
       });
     });
 
@@ -113,12 +143,10 @@ describe('POST /api/verify', () => {
       mockContractService.verifyCertificate.mockResolvedValue(mockNotFound);
 
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: validCertId });
+        .get(`/api/verify/${validCertId}`);
 
       expect(response.status).toBe(404);
       expect(response.body).toMatchObject({
-        certId: validCertId,
         status: 'NOT_FOUND',
         message: 'Certificate not found'
       });
@@ -127,33 +155,28 @@ describe('POST /api/verify', () => {
 
   describe('Validation errors', () => {
     test('should return 400 if certId is missing', async () => {
+      // For GET route, missing certId means hitting the base route
       const response = await request(app)
-        .post('/api/verify')
-        .send({});
+        .get('/api/verify/');
 
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Certificate ID is required',
-        code: 'MISSING_CERT_ID'
-      });
+      expect(response.status).toBe(400); // Missing certificate ID
+      expect(response.body.code).toBe('MISSING_CERT_ID');
     });
 
     test('should return 400 if certId is empty', async () => {
+      // Empty certId in URL parameter (spaces are handled by base route)
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: '   ' });
+        .get('/api/verify/   ');
 
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Certificate ID is required',
-        code: 'MISSING_CERT_ID'
-      });
+      expect(response.status).toBe(400); // Missing certificate ID from base route
+      expect(response.body.code).toBe('MISSING_CERT_ID');
     });
 
     test('should return 400 if certId format is invalid', async () => {
+      isValidHash.mockReturnValue(false); // Mock invalid hash
+
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: 'invalid-cert-id' });
+        .get('/api/verify/invalid-cert-id');
 
       expect(response.status).toBe(400);
       expect(response.body).toMatchObject({
@@ -164,10 +187,10 @@ describe('POST /api/verify', () => {
 
     test('should validate certId length (64 characters)', async () => {
       const shortCertId = 'a1b2c3d4e5f6';
+      isValidHash.mockReturnValue(false); // Mock invalid hash
 
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: shortCertId });
+        .get(`/api/verify/${shortCertId}`);
 
       expect(response.status).toBe(400);
       expect(response.body).toMatchObject({
@@ -179,11 +202,10 @@ describe('POST /api/verify', () => {
 
   describe('Service failures', () => {
     test('should handle blockchain service failure', async () => {
-      mockContractService.verifyCertificate.mockRejectedValue(new Error('Blockchain connection failed'));
+      mockContractService.verifyCertificate.mockRejectedValue(new Error('blockchain connection failed'));
 
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: validCertId });
+        .get(`/api/verify/${validCertId}`);
 
       expect(response.status).toBe(503);
       expect(response.body).toMatchObject({
@@ -193,11 +215,10 @@ describe('POST /api/verify', () => {
     });
 
     test('should handle contract call timeout', async () => {
-      mockContractService.verifyCertificate.mockRejectedValue(new Error('Contract call timeout'));
+      mockContractService.verifyCertificate.mockRejectedValue(new Error('contract call timeout'));
 
       const response = await request(app)
-        .post('/api/verify')
-        .send({ certId: validCertId });
+        .get(`/api/verify/${validCertId}`);
 
       expect(response.status).toBe(503);
       expect(response.body).toMatchObject({

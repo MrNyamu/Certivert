@@ -16,14 +16,14 @@ function initIPFSClient() {
 }
 
 // Clean up IPFS client
-export function closeIPFSClient() {
-  if (ipfs) {
-    // Note: kubo-rpc-client doesn't have explicit close method
-    // Setting to null allows garbage collection
-    ipfs = null;
-    console.log('IPFS client connections cleaned up');
-  }
-}
+// export function closeIPFSClient() {
+//   if (ipfs) {
+//     // Note: kubo-rpc-client doesn't have explicit close method
+//     // Setting to null allows garbage collection
+//     ipfs = null;
+//     console.log('IPFS client connections cleaned up');
+//   }
+// }
 
 /**
  * Encrypts data using AES-256-CBC

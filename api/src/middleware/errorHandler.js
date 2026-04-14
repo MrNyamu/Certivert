@@ -4,13 +4,27 @@
  */
 export function errorHandler(err, req, res, next) {
   // Log the error for debugging (but don't expose details to client)
-  console.error('Error occurred:', {
-    message: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
+  // In test environment, use console.log to avoid red error output
+  const logMethod = process.env.NODE_ENV === 'test' ? console.log : console.error;
+  const logPrefix = process.env.NODE_ENV === 'test' ? '[TEST ERROR]' : 'Error occurred:';
+  
+  // In test environment, exclude stack trace for cleaner output
+  const logData = process.env.NODE_ENV === 'test' 
+    ? {
+        message: err.message,
+        url: req.url,
+        method: req.method,
+        timestamp: new Date().toISOString()
+      }
+    : {
+        message: err.message,
+        stack: err.stack,
+        url: req.url,
+        method: req.method,
+        timestamp: new Date().toISOString()
+      };
+  
+  logMethod(logPrefix, logData);
   
   // Default error response
   let statusCode = 500;

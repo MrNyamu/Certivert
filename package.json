@@ -5,7 +5,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run && cd api && npm test",
+    "test:contracts": "vitest run",
+    "test:api": "cd api && npm test",
     "test:report": "vitest run -- --coverage --costs",
     "test:watch": "chokidar \"tests/**/*.ts\" \"contracts/**/*.clar\" -c \"npm run test:report\"",
     "dev:api": "cd api && node src/index.js",

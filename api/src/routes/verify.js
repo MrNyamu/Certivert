@@ -7,6 +7,18 @@ import { createError } from '../middleware/errorHandler.js';
 const router = Router();
 
 /**
+ * GET /api/verify
+ * Base route - returns 400 for missing certId
+ */
+router.get('/', (req, res) => {
+  res.status(400).json({
+    error: 'Certificate ID is required',
+    code: 'MISSING_CERT_ID',
+    message: 'Please provide a certificate ID in the URL: /api/verify/{certId}'
+  });
+});
+
+/**
  * GET /api/verify/:certId
  * Verifies a certificate by ID
  * 
@@ -91,7 +103,15 @@ router.get('/:certId', async (req, res, next) => {
         }
         
       } catch (ipfsError) {
-        console.error(`Error fetching PDF for certificate ${certId}:`, ipfsError);
+        // In test environment, use console.log to avoid red error output and exclude stack trace
+        const logMethod = process.env.NODE_ENV === 'test' ? console.log : console.error;
+        const logPrefix = process.env.NODE_ENV === 'test' ? `[TEST ERROR] PDF fetch for certificate ${certId}:` : `Error fetching PDF for certificate ${certId}:`;
+        
+        if (process.env.NODE_ENV === 'test') {
+          logMethod(logPrefix, ipfsError.message);
+        } else {
+          logMethod(logPrefix, ipfsError);
+        }
         
         // Return certificate info but indicate PDF verification failed
         return res.status(200).json({
@@ -112,7 +132,15 @@ router.get('/:certId', async (req, res, next) => {
     throw createError(500, `Unknown certificate status: ${status}`, 'UNKNOWN_STATUS');
     
   } catch (error) {
-    console.error('Error in certificate verification:', error);
+    // In test environment, use console.log to avoid red error output and exclude stack trace
+    const logMethod = process.env.NODE_ENV === 'test' ? console.log : console.error;
+    const logPrefix = process.env.NODE_ENV === 'test' ? '[TEST ERROR] Certificate verification:' : 'Error in certificate verification:';
+    
+    if (process.env.NODE_ENV === 'test') {
+      logMethod(logPrefix, error.message);
+    } else {
+      logMethod(logPrefix, error);
+    }
     
     // Handle specific error types
     if (error.message.includes('contract') || error.message.includes('blockchain')) {
