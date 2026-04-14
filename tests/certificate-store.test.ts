@@ -8,7 +8,7 @@ const deployer = accounts.get("deployer")!;
 const university = accounts.get("wallet_1")!;
 const knqa = accounts.get("wallet_2")!;
 const signer2 = accounts.get("wallet_3")!;
-const student = accounts.get("wallet_4")!;
+const student = accounts.get("faucet")!; // Using faucet as student since wallet_4 doesn't exist
 
 const certId = "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456";
 const ipfsCid = "QmYjtig7VJQ6XsnUjqqJvj7QaMcCAwtrgNdahSiFofrE7o";

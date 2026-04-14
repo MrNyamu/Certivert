@@ -23,7 +23,15 @@ router.get('/:cid', async (req, res) => {
     res.send(fileBuffer);
     
   } catch (error) {
-    console.error('Error downloading file:', error);
+    // In test environment, use console.log to avoid red error output and exclude stack trace
+    const logMethod = process.env.NODE_ENV === 'test' ? console.log : console.error;
+    const logPrefix = process.env.NODE_ENV === 'test' ? '[TEST ERROR] File download:' : 'Error downloading file:';
+    
+    if (process.env.NODE_ENV === 'test') {
+      logMethod(logPrefix, error.message);
+    } else {
+      logMethod(logPrefix, error);
+    }
     res.status(404).json({
       error: 'File not found or could not be downloaded',
       code: 'FILE_NOT_FOUND'

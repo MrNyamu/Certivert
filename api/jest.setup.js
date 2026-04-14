@@ -1,3 +1,5 @@
+import { jest } from '@jest/globals';
+
 // Global test setup
 // Mock console methods to reduce noise in tests
 global.console = {

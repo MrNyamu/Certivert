@@ -1,0 +1,60 @@
+id: 0
+name: Simulated deployment, used as a default for `clarinet console`, `clarinet test` and `clarinet check`
+network: simnet
+genesis:
+  wallets:
+  - name: deployer
+    address: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+    balance: '100000000000000'
+    sbtc-balance: '1000000000'
+  - name: faucet
+    address: ST2BYJ6BFG57KMDF49VP0V5W2V1GJSF9666S5KKN3
+    balance: '100000000000000'
+    sbtc-balance: '1000000000'
+  - name: wallet_1
+    address: ST1TJ25SYA53BHQEFND1DDSDXYMS5CRH31959963Z
+    balance: '100000000000000'
+    sbtc-balance: '1000000000'
+  - name: wallet_2
+    address: ST3FBG9GVQFWBBZM8HD2SGPD10VEV1XMD1ZPKQQW6
+    balance: '100000000000000'
+    sbtc-balance: '1000000000'
+  - name: wallet_3
+    address: ST1RD2JCPB6JH0400J6HC20DR9EAFH2HJ3PZDKG6Q
+    balance: '100000000000000'
+    sbtc-balance: '1000000000'
+  contracts:
+  - genesis
+  - lockup
+  - bns
+  - cost-voting
+  - costs
+  - pox
+  - costs-2
+  - pox-2
+  - costs-3
+  - pox-3
+  - pox-4
+  - signers
+  - signers-voting
+  - costs-4
+plan:
+  batches:
+  - id: 0
+    transactions:
+    - transaction-type: emulated-contract-publish
+      contract-name: certificate-governance
+      emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      path: contracts/certificate-governance.clar
+      clarity-version: 4
+    - transaction-type: emulated-contract-publish
+      contract-name: role-registry
+      emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      path: contracts/role-registry.clar
+      clarity-version: 4
+    - transaction-type: emulated-contract-publish
+      contract-name: certificate-store
+      emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+      path: contracts/certificate-store.clar
+      clarity-version: 4
+    epoch: '3.3'
