@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
-import { connect, disconnect, isConnected as checkIsConnected, getLocalStorage } from '@stacks/connect';
+// TEMPORARILY DISABLED TO FIX STACKSPROVIDER CONFLICT
+// import { connect, disconnect, isConnected as checkIsConnected, getLocalStorage } from '@stacks/connect';
 import { STACKS_MAINNET, STACKS_TESTNET, STACKS_DEVNET } from '@stacks/network';
+
+// Temporary stubs to prevent errors (useWallet hook is being replaced by Redux)
+const connect = async () => ({ success: false, error: 'Use Redux auth instead' });
+const disconnect = () => {};
+const checkIsConnected = () => false;
+const getLocalStorage = () => null;
 
 export function useWallet() {
   const [address, setAddress] = useState(null);

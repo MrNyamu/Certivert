@@ -1,0 +1,382 @@
+{
+  "info": {
+    "name": "Certivert Wallet Authentication API",
+    "description": "API collection for testing Certivert with wallet-based authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "certivert-wallet-api-2025",
+    "version": "2.0.0"
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": ["{{base_url}}"],
+          "path": ["health"]
+        },
+        "description": "Check API health status - includes blockchain and IPFS connectivity"
+      },
+      "response": []
+    },
+    {
+      "name": "API Info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api",
+          "host": ["{{base_url}}"],
+          "path": ["api"]
+        },
+        "description": "Get API information and available endpoints"
+      },
+      "response": []
+    },
+    {
+      "name": "Issue Certificate (University Role)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "walletAddress",
+              "value": "{{university_address}}",
+              "description": "Connected university wallet address",
+              "type": "text"
+            },
+            {
+              "key": "studentName",
+              "value": "John Doe Smith",
+              "description": "Full name of the student",
+              "type": "text"
+            },
+            {
+              "key": "admissionNo",
+              "value": "ADM2025001",
+              "description": "Student admission number",
+              "type": "text"
+            },
+            {
+              "key": "programme",
+              "value": "Bachelor of Computer Science",
+              "description": "Academic programme name",
+              "type": "text"
+            },
+            {
+              "key": "year",
+              "value": "2025",
+              "description": "Graduation year",
+              "type": "text"
+            },
+            {
+              "key": "grade",
+              "value": "First Class Honours",
+              "description": "Final grade/classification",
+              "type": "text"
+            },
+            {
+              "key": "pdf",
+              "description": "Certificate PDF file",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/issue",
+          "host": ["{{base_url}}"],
+          "path": ["api", "issue"]
+        },
+        "description": "Issue a new certificate. Requires wallet with 'university' role."
+      },
+      "response": []
+    },
+    {
+      "name": "Issue Certificate (Wrong Role - Should Fail)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "walletAddress",
+              "value": "{{student_address}}",
+              "description": "Student wallet (insufficient role)",
+              "type": "text"
+            },
+            {
+              "key": "studentName",
+              "value": "Jane Test",
+              "type": "text"
+            },
+            {
+              "key": "admissionNo",
+              "value": "ADM2025002",
+              "type": "text"
+            },
+            {
+              "key": "programme",
+              "value": "Bachelor of Business",
+              "type": "text"
+            },
+            {
+              "key": "year",
+              "value": "2025",
+              "type": "text"
+            },
+            {
+              "key": "grade",
+              "value": "Second Class",
+              "type": "text"
+            },
+            {
+              "key": "pdf",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/issue",
+          "host": ["{{base_url}}"],
+          "path": ["api", "issue"]
+        },
+        "description": "Test with student wallet - should return 403 Forbidden"
+      },
+      "response": []
+    },
+    {
+      "name": "Issue Certificate (No Wallet - Should Fail)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "studentName",
+              "value": "Missing Wallet Test",
+              "type": "text"
+            },
+            {
+              "key": "admissionNo",
+              "value": "ADM2025003",
+              "type": "text"
+            },
+            {
+              "key": "programme",
+              "value": "Test Programme",
+              "type": "text"
+            },
+            {
+              "key": "year",
+              "value": "2025",
+              "type": "text"
+            },
+            {
+              "key": "grade",
+              "value": "Test Grade",
+              "type": "text"
+            },
+            {
+              "key": "pdf",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/issue",
+          "host": ["{{base_url}}"],
+          "path": ["api", "issue"]
+        },
+        "description": "Test without wallet address - should return 401 Unauthorized"
+      },
+      "response": []
+    },
+    {
+      "name": "Verify Certificate (Public)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/verify/{{cert_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "verify", "{{cert_id}}"]
+        },
+        "description": "Verify a certificate by ID. Public endpoint - no authentication required."
+      },
+      "response": []
+    },
+    {
+      "name": "Revoke Certificate (University Role)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"walletAddress\": \"{{university_address}}\",\n  \"certId\": \"{{cert_id}}\",\n  \"reason\": \"Academic misconduct detected\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/revoke",
+          "host": ["{{base_url}}"],
+          "path": ["api", "revoke"]
+        },
+        "description": "Revoke a certificate. Requires wallet with 'university' or 'knqa' role."
+      },
+      "response": []
+    },
+    {
+      "name": "Revoke Certificate (KNQA Role)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"walletAddress\": \"{{knqa_address}}\",\n  \"certId\": \"{{cert_id}}\",\n  \"reason\": \"Regulatory compliance issue\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/revoke",
+          "host": ["{{base_url}}"],
+          "path": ["api", "revoke"]
+        },
+        "description": "Revoke certificate with KNQA authority"
+      },
+      "response": []
+    },
+    {
+      "name": "Revoke Certificate (Student Role - Should Fail)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"walletAddress\": \"{{student_address}}\",\n  \"certId\": \"{{cert_id}}\",\n  \"reason\": \"Test revocation\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/revoke",
+          "host": ["{{base_url}}"],
+          "path": ["api", "revoke"]
+        },
+        "description": "Test with student wallet - should return 403 Forbidden"
+      },
+      "response": []
+    },
+    {
+      "name": "Download File from IPFS",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/files/{{ipfs_cid}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "files", "{{ipfs_cid}}"]
+        },
+        "description": "Download a file from IPFS using the CID"
+      },
+      "response": []
+    },
+    {
+      "name": "Get File Info from IPFS",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/files/{{ipfs_cid}}/info",
+          "host": ["{{base_url}}"],
+          "path": ["api", "files", "{{ipfs_cid}}", "info"]
+        },
+        "description": "Get file information (size, type, etc.) from IPFS"
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-set cert_id from previous responses",
+          "if (pm.response && pm.response.json) {",
+          "  const responseJson = pm.response.json();",
+          "  if (responseJson.certId) {",
+          "    pm.environment.set('cert_id', responseJson.certId);",
+          "  }",
+          "  if (responseJson.ipfsCid) {",
+          "    pm.environment.set('ipfs_cid', responseJson.ipfsCid);",
+          "  }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3005",
+      "description": "Base URL for the Certivert API"
+    },
+    {
+      "key": "university_address",
+      "value": "ST1UNIVERSITY_WALLET_ADDRESS_HERE",
+      "description": "Wallet address with university role"
+    },
+    {
+      "key": "knqa_address", 
+      "value": "ST1KNQA_WALLET_ADDRESS_HERE",
+      "description": "Wallet address with KNQA role"
+    },
+    {
+      "key": "student_address",
+      "value": "ST1STUDENT_WALLET_ADDRESS_HERE", 
+      "description": "Wallet address with student role"
+    },
+    {
+      "key": "cert_id",
+      "value": "",
+      "description": "Certificate ID from issuance response"
+    },
+    {
+      "key": "ipfs_cid",
+      "value": "",
+      "description": "IPFS CID from upload response"
+    }
+  ]
+}

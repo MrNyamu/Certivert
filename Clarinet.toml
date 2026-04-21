@@ -14,7 +14,7 @@ path = "contracts/certificate-store.clar"
 epoch = "latest"
 depends_on = ["role-registry"]
 
-[contracts.certificate-governance]
+[contracts.certificate-governance-v3]
 path = "contracts/certificate-governance.clar"
 epoch = "latest"
 depends_on = []

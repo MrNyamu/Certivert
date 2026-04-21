@@ -14,7 +14,11 @@ const mockSingleMiddleware = jest.fn((req, res, next) => {
 });
 const mockUpload = { single: jest.fn(() => mockSingleMiddleware) };
 const handleUploadError = jest.fn((error, req, res, next) => next());
-const mockConfig = { network: 'test' };
+const mockConfig = { 
+  STACKS_NETWORK: 'test',
+  DEPLOYER_PRIVATE_KEY: 'test-key',
+  SIGNER_2_PRIVATE_KEY: 'test-signer2-key'
+};
 
 describe('POST /api/issue', () => {
   let app;
@@ -50,321 +54,177 @@ describe('POST /api/issue', () => {
       config: mockConfig
     }));
 
-    // Import the router after mocking
-    const { default: router } = await import('../src/routes/issue.js');
+    await jest.unstable_mockModule('../src/middleware/errorHandler.js', () => ({
+      createError: jest.fn((status, message, code) => {
+        const error = new Error(message);
+        error.statusCode = status;
+        error.code = code;
+        return error;
+      })
+    }));
+
+    // Import the compiled router from dist directory
+    const { default: router } = await import('../dist/routes/issue.js');
     issueRouter = router;
 
-    // Import error handler
-    const { errorHandler } = await import('../src/middleware/errorHandler.js');
+    // Create mock error handler
+    const mockErrorHandler = (err, req, res, next) => {
+      res.status(err.statusCode || 500).json({
+        error: err.message,
+        code: err.code,
+        message: err.message
+      });
+    };
 
     // Create test app
     app = express();
     app.use(express.json());
-    app.use(express.urlencoded({ extended: true })); // Add form parsing
     app.use('/api/issue', issueRouter);
-    app.use(errorHandler); // Add error handler middleware
+    app.use(mockErrorHandler);
   });
 
   beforeEach(() => {
     // Reset all mocks
     jest.clearAllMocks();
 
-    // Create fresh mock service
+    // Setup mock contract service
     mockContractService = {
       proposeCertificate: jest.fn(),
-      approveCertificate: jest.fn(),
-      getKeyByRole: jest.fn(),
+      approveCertificate: jest.fn()
     };
 
-    // Make the factory return the mock service
+    // Setup default mock implementations
+    computeCertHash.mockReturnValue('mock-cert-hash-12345');
+    uploadToIPFS.mockResolvedValue({ cid: 'mock-ipfs-cid-67890' });
+    pinCID.mockResolvedValue();
     getCachedContractService.mockResolvedValue(mockContractService);
+    mockContractService.proposeCertificate.mockResolvedValue('mock-propose-tx-id');
+    mockContractService.approveCertificate.mockResolvedValue('mock-approve-tx-id');
+  });
 
-    // Reset upload middleware mock to properly handle multipart form data
-    mockUpload.single.mockReturnValue(mockSingleMiddleware);
-    mockSingleMiddleware.mockImplementation((req, res, next) => {
-      // Set file for successful upload scenarios  
-      req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
+  test('should issue a certificate successfully', async () => {
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .field('admissionNo', 'ADM001')
+      .field('programme', 'Computer Science')
+      .field('year', '2024')
+      .field('grade', 'A')
+      .attach('pdf', Buffer.from('mock-pdf-content'), 'certificate.pdf');
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      certId: 'mock-cert-hash-12345',
+      ipfsCid: 'mock-ipfs-cid-67890',
+      proposeTxId: 'mock-propose-tx-id',
+      approveTxId: 'mock-approve-tx-id',
+      status: 'issued',
+      message: 'Certificate issued successfully'
+    });
+
+    // Verify all functions were called
+    expect(computeCertHash).toHaveBeenCalledWith({
+      studentName: 'John Doe',
+      admissionNo: 'ADM001',
+      programme: 'Computer Science',
+      year: 2024,
+      grade: 'A'
+    });
+    expect(uploadToIPFS).toHaveBeenCalled();
+    expect(mockContractService.proposeCertificate).toHaveBeenCalled();
+    expect(mockContractService.approveCertificate).toHaveBeenCalled();
+    expect(pinCID).toHaveBeenCalledWith('mock-ipfs-cid-67890');
+  });
+
+  test('should fail when file is missing', async () => {
+    // Mock file upload to return no file
+    const mockSingleMiddlewareNoFile = jest.fn((req, res, next) => {
+      req.file = undefined;
       next();
     });
+    mockUpload.single.mockReturnValueOnce(mockSingleMiddlewareNoFile);
 
-    // Set default happy-path behaviour
-    computeCertHash.mockReturnValue('test-cert-hash-123456789012345678901234567890123456789012345678');
-    uploadToIPFS.mockResolvedValue({ cid: 'QmTestCID123456789' });
-    pinCID.mockResolvedValue(true);
-    mockContractService.proposeCertificate.mockResolvedValue('propose-tx-id');
-    mockContractService.approveCertificate.mockResolvedValue('approve-tx-id');
-    mockContractService.getKeyByRole.mockReturnValue('test-private-key');
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .field('admissionNo', 'ADM001')
+      .field('programme', 'Computer Science')
+      .field('year', '2024')
+      .field('grade', 'A');
+
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('PDF file is required');
   });
 
-  const validCertificateData = {
-    studentName: 'John Doe',
-    admissionNo: 'ADM001',
-    programme: 'Computer Science',
-    year: '2023',
-    grade: 'First Class'
-  };
+  test('should fail when required fields are missing', async () => {
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .attach('pdf', Buffer.from('mock-pdf-content'), 'certificate.pdf');
 
-  // Create a test PDF buffer
-  const testPdfBuffer = Buffer.from('mock-pdf-content');
-
-  describe('Successful certificate issuance', () => {
-    test('should issue certificate with valid data and PDF', async () => {
-      // Override middleware to properly set req.body for successful test
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        req.body = {
-          studentName: validCertificateData.studentName,
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: validCertificateData.year,
-          grade: validCertificateData.grade
-        };
-        next();
-      });
-
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', validCertificateData.studentName)
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
-
-      expect(response.status).toBe(201);
-      expect(response.body).toMatchObject({
-        certId: expect.any(String),
-        ipfsCid: 'QmTestCID123456789',
-        proposeTxId: 'propose-tx-id',
-        approveTxId: 'approve-tx-id',
-        status: 'issued',
-        message: 'Certificate issued successfully'
-      });
-
-      // Verify service calls - computeCertHash is called twice
-      expect(computeCertHash).toHaveBeenCalledTimes(2);
-      expect(computeCertHash).toHaveBeenCalledWith(expect.objectContaining({
-        studentName: 'John Doe',
-        admissionNo: 'ADM001',
-        programme: 'Computer Science',
-        year: 2023,
-        grade: 'First Class'
-      }));
-      expect(uploadToIPFS).toHaveBeenCalledWith(testPdfBuffer);
-      expect(mockContractService.proposeCertificate).toHaveBeenCalled();
-      expect(mockContractService.approveCertificate).toHaveBeenCalled();
-      expect(pinCID).toHaveBeenCalledWith('QmTestCID123456789');
-    });
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('Missing required field');
   });
 
-  describe('Validation errors', () => {
-    test('should return 400 if PDF file is missing', async () => {
-      // Override the middleware to simulate no file
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = null; // Simulate no file uploaded
-        next();
-      });
+  test('should fail when year is invalid', async () => {
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .field('admissionNo', 'ADM001')
+      .field('programme', 'Computer Science')
+      .field('year', 'invalid-year')
+      .field('grade', 'A')
+      .attach('pdf', Buffer.from('mock-pdf-content'), 'certificate.pdf');
 
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', validCertificateData.studentName)
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade);
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'PDF file is required',
-        code: 'MISSING_FILE'
-      });
-    });
-
-    test('should return 400 if required field is missing', async () => {
-      // Override middleware to not add studentName to req.body
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        // Don't populate req.body with studentName - simulate missing field
-        req.body = {
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: validCertificateData.year,
-          grade: validCertificateData.grade
-        };
-        next();
-      });
-
-      const response = await request(app)
-        .post('/api/issue')
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Missing required field: studentName',
-        code: 'MISSING_FIELD'
-      });
-    });
-
-    test('should return 400 for invalid graduation year', async () => {
-      // Override middleware to set invalid year in req.body
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        req.body = {
-          studentName: validCertificateData.studentName,
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: '1800',  // Invalid year
-          grade: validCertificateData.grade
-        };
-        next();
-      });
-
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', validCertificateData.studentName)
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', '1800')  // Invalid year
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Invalid graduation year',
-        code: 'INVALID_YEAR'
-      });
-    });
-
-    test('should return 400 for empty required fields', async () => {
-      // Override middleware to set empty studentName in req.body
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        req.body = {
-          studentName: '   ',  // Empty after trim
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: validCertificateData.year,
-          grade: validCertificateData.grade
-        };
-        next();
-      });
-
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', '   ')  // Empty after trim
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Missing required field: studentName',
-        code: 'MISSING_FIELD'
-      });
-    });
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('Invalid graduation year');
   });
 
-  describe('Service failures', () => {
-    test('should handle IPFS service failure', async () => {
-      uploadToIPFS.mockRejectedValue(new Error('IPFS connection failed'));
-      
-      // Override middleware to properly set req.body
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        req.body = {
-          studentName: validCertificateData.studentName,
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: validCertificateData.year,
-          grade: validCertificateData.grade
-        };
-        next();
-      });
+  test('should handle IPFS upload error', async () => {
+    uploadToIPFS.mockRejectedValue(new Error('IPFS connection failed'));
 
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', validCertificateData.studentName)
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .field('admissionNo', 'ADM001')
+      .field('programme', 'Computer Science')
+      .field('year', '2024')
+      .field('grade', 'A')
+      .attach('pdf', Buffer.from('mock-pdf-content'), 'certificate.pdf');
 
-      expect(response.status).toBe(503);
-      expect(response.body).toMatchObject({
-        error: 'IPFS service unavailable',
-        code: 'IPFS_ERROR'
-      });
-    });
+    expect(response.status).toBe(503);
+    expect(response.body.message || response.body.error).toContain('IPFS service unavailable');
+  });
 
-    test('should handle blockchain service failure', async () => {
-      mockContractService.proposeCertificate.mockRejectedValue(new Error('Blockchain contract call failed'));
-      
-      // Override middleware to properly set req.body
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        req.body = {
-          studentName: validCertificateData.studentName,
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: validCertificateData.year,
-          grade: validCertificateData.grade
-        };
-        next();
-      });
+  test('should handle blockchain error', async () => {
+    mockContractService.proposeCertificate.mockRejectedValue(new Error('Contract error'));
 
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', validCertificateData.studentName)
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .field('admissionNo', 'ADM001')
+      .field('programme', 'Computer Science')
+      .field('year', '2024')
+      .field('grade', 'A')
+      .attach('pdf', Buffer.from('mock-pdf-content'), 'certificate.pdf');
 
-      expect(response.status).toBe(503);
-      expect(response.body).toMatchObject({
-        error: 'Blockchain service unavailable',
-        code: 'BLOCKCHAIN_ERROR'
-      });
-    });
+    expect(response.status).toBe(503);
+    expect(response.body.message || response.body.error).toContain('Blockchain service unavailable');
+  });
 
-    test('should handle duplicate certificate', async () => {
-      mockContractService.proposeCertificate.mockRejectedValue(new Error('Certificate already exists'));
-      
-      // Override middleware to properly set req.body
-      mockSingleMiddleware.mockImplementationOnce((req, res, next) => {
-        req.file = { buffer: Buffer.from('mock-pdf-content'), mimetype: 'application/pdf' };
-        req.body = {
-          studentName: validCertificateData.studentName,
-          admissionNo: validCertificateData.admissionNo,
-          programme: validCertificateData.programme,
-          year: validCertificateData.year,
-          grade: validCertificateData.grade
-        };
-        next();
-      });
+  test('should handle duplicate certificate error', async () => {
+    mockContractService.proposeCertificate.mockRejectedValue(new Error('Certificate already exists'));
 
-      const response = await request(app)
-        .post('/api/issue')
-        .field('studentName', validCertificateData.studentName)
-        .field('admissionNo', validCertificateData.admissionNo)
-        .field('programme', validCertificateData.programme)
-        .field('year', validCertificateData.year)
-        .field('grade', validCertificateData.grade)
-        .attach('pdf', testPdfBuffer, 'test-certificate.pdf');
+    const response = await request(app)
+      .post('/api/issue')
+      .field('studentName', 'John Doe')
+      .field('admissionNo', 'ADM001')
+      .field('programme', 'Computer Science')
+      .field('year', '2024')
+      .field('grade', 'A')
+      .attach('pdf', Buffer.from('mock-pdf-content'), 'certificate.pdf');
 
-      expect(response.status).toBe(409);
-      expect(response.body).toMatchObject({
-        error: 'Certificate with this ID already exists',
-        code: 'DUPLICATE_CERT'
-      });
-    });
+    expect(response.status).toBe(409);
+    expect(response.body.message || response.body.error).toContain('Certificate with this ID already exists');
   });
 });

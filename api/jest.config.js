@@ -6,7 +6,7 @@ export default {
   transform: {},
   testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
   collectCoverageFrom: [
-    'src/**/*.js',
+    'src/**/*.{js,ts}',
     '!src/index.js', // Exclude main entry file
     '!**/node_modules/**',
   ],
