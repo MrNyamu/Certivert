@@ -8,9 +8,9 @@ plan:
   - id: 0
     transactions:
     - transaction-type: contract-publish
-      contract-name: certificate-governance
+      contract-name: certificate-governance-v3
       expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      cost: 97770
+      cost: 101470
       path: contracts/certificate-governance.clar
       anchor-block-only: true
       clarity-version: 4

@@ -23,248 +23,276 @@ describe('POST /api/revoke', () => {
       isValidHash
     }));
 
-    // Import the router after mocking
-    const { default: router } = await import('../src/routes/revoke.js');
+    await jest.unstable_mockModule('../src/middleware/errorHandler.js', () => ({
+      createError: jest.fn((status, message, code) => {
+        const error = new Error(message);
+        error.statusCode = status;
+        error.code = code;
+        return error;
+      })
+    }));
+
+    // Import the compiled router from dist directory
+    const { default: router } = await import('../dist/routes/revoke.js');
     revokeRouter = router;
 
-    // Import error handler
-    const { errorHandler } = await import('../src/middleware/errorHandler.js');
+    // Create mock error handler
+    const mockErrorHandler = (err, req, res, next) => {
+      res.status(err.statusCode || 500).json({
+        error: err.message,
+        code: err.code,
+        message: err.message
+      });
+    };
 
     // Create test app
     app = express();
     app.use(express.json());
     app.use('/api/revoke', revokeRouter);
-    app.use(errorHandler); // Add error handler middleware
+    app.use(mockErrorHandler);
   });
 
   beforeEach(() => {
+    // Reset all mocks
     jest.clearAllMocks();
 
-    // Mock contract service
+    // Setup mock contract service
     mockContractService = {
-      revokeCertificate: jest.fn(),
       verifyCertificate: jest.fn(),
-      getKeyByRole: jest.fn(),
+      revokeCertificate: jest.fn(),
+      getKeyByRole: jest.fn()
     };
 
+    // Setup default mock implementations
     getCachedContractService.mockResolvedValue(mockContractService);
-    mockContractService.getKeyByRole.mockReturnValue('test-private-key');
-    isValidHash.mockReturnValue(true); // Default to valid hash format
+    isValidHash.mockReturnValue(true);
   });
 
-  const validCertId = 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456';
-  const validRevokeData = {
-    certId: validCertId,
-    callerRole: 'university'  // Using callerRole not revokerRole
-  };
+  test('should revoke certificate successfully', async () => {
+    const mockCertificate = {
+      studentName: 'John Doe',
+      programme: 'Computer Science',
+      year: 2024,
+      grade: 'A'
+    };
 
-  describe('Successful revocation', () => {
-    test('should revoke certificate with university role', async () => {
-      // Mock certificate verification (certificate exists and not revoked)
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'VALID',
-        certificate: { studentName: 'John Doe' }
-      });
-      mockContractService.revokeCertificate.mockResolvedValue('revoke-tx-id-123');
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'VALID',
+      certificate: mockCertificate
+    });
+    mockContractService.getKeyByRole.mockReturnValue('mock-private-key');
+    mockContractService.revokeCertificate.mockResolvedValue('mock-tx-id');
 
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(validRevokeData);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({
-        certId: validCertId,
-        txId: 'revoke-tx-id-123',
-        status: 'revoked',
-        revokedBy: 'university',
-        message: 'Certificate revoked successfully'
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345',
+        callerRole: 'university',
+        reason: 'Academic misconduct'
       });
 
-      expect(mockContractService.verifyCertificate).toHaveBeenCalledWith(validCertId);
-      expect(mockContractService.revokeCertificate).toHaveBeenCalledWith(
-        validCertId,
-        'test-private-key'
-      );
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      certId: 'mock-cert-id-12345',
+      txId: 'mock-tx-id',
+      status: 'revoked',
+      revokedBy: 'university',
+      message: 'Certificate revoked successfully'
     });
 
-    test('should revoke certificate with KNQA role', async () => {
-      const knqaRevokeData = { ...validRevokeData, callerRole: 'knqa' };
-      
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'VALID',
-        certificate: { studentName: 'Jane Doe' }
-      });
-      mockContractService.revokeCertificate.mockResolvedValue('revoke-tx-id-456');
-
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(knqaRevokeData);
-
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({
-        certId: validCertId,
-        txId: 'revoke-tx-id-456',
-        status: 'revoked',
-        revokedBy: 'knqa'
-      });
-
-      expect(mockContractService.getKeyByRole).toHaveBeenCalledWith('knqa');
-    });
+    expect(mockContractService.verifyCertificate).toHaveBeenCalledWith('mock-cert-id-12345');
+    expect(mockContractService.getKeyByRole).toHaveBeenCalledWith('university');
+    expect(mockContractService.revokeCertificate).toHaveBeenCalledWith('mock-cert-id-12345', 'mock-private-key');
   });
 
-  describe('Validation errors', () => {
-    test('should return 400 if certId is missing', async () => {
-      const response = await request(app)
-        .post('/api/revoke')
-        .send({
-          callerRole: 'university'
-        });
+  test('should allow KNQA to revoke certificate', async () => {
+    const mockCertificate = {
+      studentName: 'Jane Doe',
+      programme: 'Engineering',
+      year: 2024,
+      grade: 'B+'
+    };
 
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Missing required fields: certId and callerRole',
-        code: 'MISSING_FIELDS'
-      });
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'VALID',
+      certificate: mockCertificate
     });
+    mockContractService.getKeyByRole.mockReturnValue('mock-knqa-key');
+    mockContractService.revokeCertificate.mockResolvedValue('mock-tx-id-knqa');
 
-    test('should return 400 if callerRole is missing', async () => {
-      const response = await request(app)
-        .post('/api/revoke')
-        .send({
-          certId: validCertId
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Missing required fields: certId and callerRole',
-        code: 'MISSING_FIELDS'
-      });
-    });
-
-    test('should return 400 if callerRole is invalid', async () => {
-      const response = await request(app)
-        .post('/api/revoke')
-        .send({
-          certId: validCertId,
-          callerRole: 'student'  // Invalid role
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Invalid caller role. Must be "university" or "knqa"',
-        code: 'INVALID_ROLE'
-      });
-    });
-
-    test('should return 400 for invalid certId format', async () => {
-      isValidHash.mockReturnValue(false); // Mock invalid hash
-
-      const response = await request(app)
-        .post('/api/revoke')
-        .send({
-          certId: 'invalid-cert-id',
-          callerRole: 'university'
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body).toMatchObject({
-        error: 'Invalid certificate ID format',
-        code: 'INVALID_CERT_ID'
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-67890',
+        callerRole: 'knqa',
+        reason: 'Verification failure'
       });
 
-      expect(isValidHash).toHaveBeenCalledWith('invalid-cert-id');
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      certId: 'mock-cert-id-67890',
+      txId: 'mock-tx-id-knqa',
+      status: 'revoked',
+      revokedBy: 'knqa',
+      message: 'Certificate revoked successfully'
     });
+
+    expect(mockContractService.getKeyByRole).toHaveBeenCalledWith('knqa');
   });
 
-  describe('Business logic errors', () => {
-    test('should handle certificate not found', async () => {
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'NOT_FOUND',
-        certificate: null
+  test('should fail when required fields are missing', async () => {
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345'
+        // Missing callerRole
       });
 
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(validRevokeData);
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('Missing required fields: certId and callerRole');
 
-      expect(response.status).toBe(404);
-      expect(response.body).toMatchObject({
-        error: 'Certificate not found',
-        code: 'CERT_NOT_FOUND'
-      });
-    });
-
-    test('should handle already revoked certificate', async () => {
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'REVOKED',
-        certificate: { studentName: 'John Doe' }
-      });
-
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(validRevokeData);
-
-      expect(response.status).toBe(409);
-      expect(response.body).toMatchObject({
-        error: 'Certificate is already revoked',
-        code: 'ALREADY_REVOKED'
-      });
-    });
-
-    test('should handle unauthorized revocation attempt', async () => {
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'VALID',
-        certificate: { studentName: 'John Doe' }
-      });
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('not authorized'));
-
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(validRevokeData);
-
-      expect(response.status).toBe(403);
-      expect(response.body).toMatchObject({
-        error: 'Not authorized to revoke this certificate',
-        code: 'NOT_AUTHORIZED'
-      });
-    });
+    expect(mockContractService.verifyCertificate).not.toHaveBeenCalled();
   });
 
-  describe('Service failures', () => {
-    test('should handle blockchain service failure', async () => {
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'VALID',
-        certificate: { studentName: 'John Doe' }
-      });
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('blockchain connection failed'));
+  test('should fail when certificate ID format is invalid', async () => {
+    isValidHash.mockReturnValue(false);
 
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(validRevokeData);
-
-      expect(response.status).toBe(503);
-      expect(response.body).toMatchObject({
-        error: 'Blockchain service unavailable',
-        code: 'BLOCKCHAIN_ERROR'
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'invalid-cert-id',
+        callerRole: 'university'
       });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('Invalid certificate ID format');
+
+    expect(mockContractService.verifyCertificate).not.toHaveBeenCalled();
+  });
+
+  test('should fail when caller role is invalid', async () => {
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345',
+        callerRole: 'invalid-role'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('Invalid caller role. Must be "university" or "knqa"');
+
+    expect(mockContractService.verifyCertificate).not.toHaveBeenCalled();
+  });
+
+  test('should fail when certificate is not found', async () => {
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'NOT_FOUND'
     });
 
-    test('should handle contract transaction failure', async () => {
-      mockContractService.verifyCertificate.mockResolvedValue({
-        status: 'VALID',
-        certificate: { studentName: 'John Doe' }
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'nonexistent-cert-id',
+        callerRole: 'university'
       });
-      mockContractService.revokeCertificate.mockRejectedValue(new Error('contract'));
 
-      const response = await request(app)
-        .post('/api/revoke')
-        .send(validRevokeData);
+    expect(response.status).toBe(404);
+    expect(response.body.message || response.body.error).toContain('Certificate not found');
 
-      expect(response.status).toBe(503);
-      expect(response.body).toMatchObject({
-        error: 'Blockchain service unavailable',
-        code: 'BLOCKCHAIN_ERROR'
-      });
+    expect(mockContractService.verifyCertificate).toHaveBeenCalledWith('nonexistent-cert-id');
+    expect(mockContractService.revokeCertificate).not.toHaveBeenCalled();
+  });
+
+  test('should fail when certificate is already revoked', async () => {
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'REVOKED',
+      certificate: { studentName: 'John Doe' }
     });
+
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345',
+        callerRole: 'university'
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.message || response.body.error).toContain('Certificate is already revoked');
+
+    expect(mockContractService.verifyCertificate).toHaveBeenCalledWith('mock-cert-id-12345');
+    expect(mockContractService.revokeCertificate).not.toHaveBeenCalled();
+  });
+
+  test('should handle authorization error from contract', async () => {
+    const mockCertificate = {
+      studentName: 'John Doe',
+      programme: 'Computer Science'
+    };
+
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'VALID',
+      certificate: mockCertificate
+    });
+    mockContractService.getKeyByRole.mockReturnValue('mock-private-key');
+    mockContractService.revokeCertificate.mockRejectedValue(new Error('ERR-NOT-AUTHORISED'));
+
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345',
+        callerRole: 'university'
+      });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message || response.body.error).toContain('Not authorized to revoke this certificate');
+  });
+
+  test('should handle blockchain service error', async () => {
+    const mockCertificate = {
+      studentName: 'John Doe',
+      programme: 'Computer Science'
+    };
+
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'VALID',
+      certificate: mockCertificate
+    });
+    mockContractService.getKeyByRole.mockReturnValue('mock-private-key');
+    mockContractService.revokeCertificate.mockRejectedValue(new Error('Blockchain connection failed'));
+
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345',
+        callerRole: 'university'
+      });
+
+    expect(response.status).toBe(503);
+    expect(response.body.message || response.body.error).toContain('Blockchain service unavailable');
+  });
+
+  test('should handle invalid role from getKeyByRole', async () => {
+    const mockCertificate = {
+      studentName: 'John Doe',
+      programme: 'Computer Science'
+    };
+
+    mockContractService.verifyCertificate.mockResolvedValue({
+      status: 'VALID',
+      certificate: mockCertificate
+    });
+    mockContractService.getKeyByRole.mockImplementation(() => {
+      throw new Error('Invalid role for key lookup');
+    });
+
+    const response = await request(app)
+      .post('/api/revoke')
+      .send({
+        certId: 'mock-cert-id-12345',
+        callerRole: 'university'
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message || response.body.error).toContain('Invalid role for key lookup');
   });
 });

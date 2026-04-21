@@ -41,9 +41,10 @@
 (define-map certificates 
   (string-ascii 64)  ;; cert-id
   {
-    student-principal: principal,
+    student-principal: (optional principal),
     university-principal: principal,
     student-name: (string-ascii 100),
+    admission-no: (string-ascii 50),
     programme: (string-ascii 100),
     year: uint,
     grade: (string-ascii 20),
@@ -61,8 +62,8 @@
   (string-ascii 64)  ;; cert-id
   {
     university-principal: principal,
-    student-principal: principal,
     student-name: (string-ascii 100),
+    admission-no: (string-ascii 50),
     programme: (string-ascii 100),
     year: uint,
     grade: (string-ascii 20),
@@ -133,8 +134,8 @@
 ;; Step 1: University requests certificate issuance
 (define-public (request-issue-certificate 
   (cert-id (string-ascii 64))
-  (student-principal principal)
   (student-name (string-ascii 100))
+  (admission-no (string-ascii 50))
   (programme (string-ascii 100))
   (year uint)
   (grade (string-ascii 20))
@@ -151,8 +152,8 @@
     ;; Create pending issuance request
     (map-set pending-issuance cert-id {
       university-principal: tx-sender,
-      student-principal: student-principal,
       student-name: student-name,
+      admission-no: admission-no,
       programme: programme,
       year: year,
       grade: grade,
@@ -179,9 +180,10 @@
       
       ;; Create the final certificate
       (map-set certificates cert-id {
-        student-principal: (get student-principal pending-request),
+        student-principal: none,
         university-principal: (get university-principal pending-request),
         student-name: (get student-name pending-request),
+        admission-no: (get admission-no pending-request),
         programme: (get programme pending-request),
         year: (get year pending-request),
         grade: (get grade pending-request),
@@ -310,11 +312,19 @@
   (ok (map-get? pending-revocation cert-id))
 )
 
-;; List all pending issuance requests for KNQA to review
-(define-read-only (get-pending-issuances-count)
-  ;; Note: This would require iteration in a real implementation
-  ;; For now, frontend will query individual cert-ids
-  (ok u0)
+;; Get multiple pending issuances by cert-id list
+(define-read-only (get-pending-issuances-batch (cert-ids (list 20 (string-ascii 64))))
+  (ok (map get-pending-issuance cert-ids))
+)
+
+;; Get multiple pending revocations by cert-id list
+(define-read-only (get-pending-revocations-batch (cert-ids (list 20 (string-ascii 64))))
+  (ok (map get-pending-revocation cert-ids))
+)
+
+;; Get multiple certificates by cert-id list
+(define-read-only (get-certificates-batch (cert-ids (list 20 (string-ascii 64))))
+  (ok (map get-certificate cert-ids))
 )
 
 ;; Get admin address

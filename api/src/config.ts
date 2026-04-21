@@ -1,0 +1,86 @@
+import dotenv from 'dotenv';
+import type { ConfigService } from './types/index.js';
+
+// Load environment variables
+dotenv.config();
+
+// Type-safe configuration object
+export const config: ConfigService = {
+  // Stacks configuration
+  // Options: 'simnet' (local in-process), 'devnet' (local docker), 'testnet', 'mainnet'
+  STACKS_NETWORK: process.env.STACKS_NETWORK || 'devnet',
+  STACKS_API_URL: process.env.STACKS_API_URL || 'http://localhost:3999',
+  CONTRACT_ADDRESS: process.env.CONTRACT_ADDRESS || 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+  CONTRACT_NAME_ROLES: process.env.CONTRACT_NAME_ROLES || 'certificate-governance-v3',
+  CONTRACT_NAME_CERTS: process.env.CONTRACT_NAME_CERTS || 'certificate-store',
+  
+  // IPFS configuration
+  IPFS_API_URL: process.env.IPFS_API_URL || 'http://127.0.0.1:5001',
+  
+  // API configuration
+  API_PORT: parseInt(process.env.API_PORT || '3005', 10),
+  
+  // Encryption configuration
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
+  
+  // Private keys (devnet keys for prototype)
+  DEPLOYER_PRIVATE_KEY: process.env.DEPLOYER_PRIVATE_KEY || '753b7cc01a1a2e86221266a154af739463fce51219d97e4f856cd7200c3d7ac5',
+  SIGNER_2_PRIVATE_KEY: process.env.SIGNER_2_PRIVATE_KEY || '7287ba251d44a4d3fd9276c88ce34c5c52a038955511cccaf77e61efef9f6c27',
+  
+  // Role addresses (devnet addresses for prototype)
+  UNIVERSITY_ADDRESS: process.env.UNIVERSITY_ADDRESS || 'STMZJQSVM24PWW7Q4562MV12011KGZXH0ANQFAQ1',
+  KNQA_ADDRESS: process.env.KNQA_ADDRESS || 'ST3TF2B73R3QVZDF9Z0KE1SR2X3HKZXS6E7R50AW0',
+  STUDENT_ADDRESS: process.env.STUDENT_ADDRESS || 'ST2PQ4A83VMAER0GV9MEZQDKGS87F718CNVW91QZ7'
+} as const;
+
+// Validate required environment variables
+const requiredVars: (keyof ConfigService)[] = ['ENCRYPTION_KEY'];
+
+for (const varName of requiredVars) {
+  const envValue = process.env[varName];
+  const configValue = config[varName];
+  
+  if (!envValue && !configValue) {
+    console.warn(`Warning: ${varName} is not set. Using default value.`);
+  }
+}
+
+// Type-safe environment validation
+function validateConfig(config: ConfigService): void {
+  // Validate port number
+  if (isNaN(config.API_PORT) || config.API_PORT < 1 || config.API_PORT > 65535) {
+    throw new Error(`Invalid API_PORT: ${config.API_PORT}. Must be a valid port number.`);
+  }
+  
+  // Validate encryption key length (should be 64 hex characters for 256-bit key)
+  if (config.ENCRYPTION_KEY.length !== 64) {
+    console.warn(`Warning: ENCRYPTION_KEY should be 64 characters for optimal security. Current length: ${config.ENCRYPTION_KEY.length}`);
+  }
+  
+  // Validate hex format for encryption key
+  if (!/^[a-fA-F0-9]+$/.test(config.ENCRYPTION_KEY)) {
+    throw new Error('ENCRYPTION_KEY must be a valid hexadecimal string');
+  }
+  
+  // Validate network type
+  const validNetworks = ['simnet', 'devnet', 'testnet', 'mainnet'];
+  if (!validNetworks.includes(config.STACKS_NETWORK)) {
+    throw new Error(`Invalid STACKS_NETWORK: ${config.STACKS_NETWORK}. Must be one of: ${validNetworks.join(', ')}`);
+  }
+}
+
+// Run configuration validation
+try {
+  validateConfig(config);
+  console.log('✅ Configuration validation passed');
+} catch (error) {
+  console.error('❌ Configuration validation failed:', (error as Error).message);
+  process.exit(1);
+}
+
+console.log('Configuration loaded:');
+console.log(`- Network: ${config.STACKS_NETWORK}`);
+console.log(`- Stacks API: ${config.STACKS_API_URL}`);
+console.log(`- Contract Address: ${config.CONTRACT_ADDRESS}`);
+console.log(`- IPFS API: ${config.IPFS_API_URL}`);
+console.log(`- Port: ${config.API_PORT}`);
