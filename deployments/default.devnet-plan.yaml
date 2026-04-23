@@ -10,7 +10,7 @@ plan:
     - transaction-type: contract-publish
       contract-name: certificate-governance-v3
       expected-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      cost: 101470
+      cost: 101450
       path: contracts/certificate-governance.clar
       anchor-block-only: true
       clarity-version: 4

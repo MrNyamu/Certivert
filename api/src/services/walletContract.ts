@@ -176,8 +176,8 @@ export class WalletContractService {
         return 'university';
       case 'knqa':
         return 'knqa';
-      case 'student':
-        return 'student';
+      case 'admin':
+        return 'admin';
       default:
         return 'none';
     }

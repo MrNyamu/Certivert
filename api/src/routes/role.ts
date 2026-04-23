@@ -112,12 +112,13 @@ router.get('/check/:address', async (req: Request<{ address: string }>, res: Res
  */
 function getRolePermissions(role: string | undefined): string[] {
   switch (role?.toLowerCase()) {
-    case 'student':
+    case 'admin':
       return [
-        'view_own_certificates',
-        'download_certificates', 
+        'manage_user_roles',
+        'view_all_certificates',
         'verify_certificates',
-        'request_revocation'
+        'system_administration',
+        'governance_operations'
       ];
     
     case 'university':

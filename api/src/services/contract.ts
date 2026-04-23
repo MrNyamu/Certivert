@@ -532,7 +532,7 @@ export async function verifyCertificate(certId: string): Promise<VerificationRes
 function mapUintToRoleString(roleUint: number): string {
   switch (roleUint) {
     case 0: return 'none';      // u0 = ROLE-NONE
-    case 1: return 'student';   // u1 = ROLE-STUDENT  
+    case 1: return 'admin';     // u1 = ROLE-ADMIN (Updated from ROLE-STUDENT)
     case 2: return 'university'; // u2 = ROLE-UNIVERSITY
     case 3: return 'knqa';      // u3 = ROLE-KNQA
     default: return 'none';
@@ -542,7 +542,7 @@ function mapUintToRoleString(roleUint: number): string {
 /**
  * Gets user role from the governance contract
  * @param userAddress - User's Stacks address
- * @returns Promise resolving to user role string ('none', 'student', 'university', 'knqa')
+ * @returns Promise resolving to user role string ('none', 'admin', 'university', 'knqa')
  */
 export async function getUserRole(userAddress: string): Promise<string> {
   try {

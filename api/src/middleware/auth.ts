@@ -135,6 +135,12 @@ export const requireKNQARole = requireRole(['knqa']);
 export const requireRevocationRole = requireRole(['university', 'knqa']);
 
 /**
+ * Middleware for pending certificate operations
+ * Both universities and KNQA can view pending certificates
+ */
+export const requireCertificateManagementRole = requireRole(['university', 'knqa']);
+
+/**
  * Middleware for verification (public access)
  * Anyone can verify certificates
  */

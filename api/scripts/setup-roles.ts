@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 
 import { config } from '../src/config.js';
-import StacksTransactions from '@stacks/transactions';
-const { makeContractCall, broadcastTransaction, stringAsciiCV, principalCV } = StacksTransactions;
-
-import StacksNetwork from '@stacks/network';
-const { STACKS_DEVNET } = StacksNetwork;
+import { makeContractCall, broadcastTransaction, uintCV, principalCV, stringAsciiCV } from '@stacks/transactions';
+import { StacksDevnet } from '@stacks/network';
 
 /**
  * Setup script to assign roles to devnet wallets

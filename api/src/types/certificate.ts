@@ -109,19 +109,19 @@ export interface RevokeCertificateResponse {
 // User role types (from Clarity contract)
 export const UserRole = {
   NONE: 0,
-  STUDENT: 1,
+  ADMIN: 1,        // Updated from STUDENT
   UNIVERSITY: 2,
   KNQA: 3
 } as const;
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
 
-export type UserRoleString = 'none' | 'student' | 'university' | 'knqa';
+export type UserRoleString = 'none' | 'admin' | 'university' | 'knqa';
 
 // Role mapping utilities
 export const roleToString = (role: UserRoleType): UserRoleString => {
   switch (role) {
-    case UserRole.STUDENT: return 'student';
+    case UserRole.ADMIN: return 'admin';           // Updated from STUDENT
     case UserRole.UNIVERSITY: return 'university';
     case UserRole.KNQA: return 'knqa';
     default: return 'none';
@@ -130,7 +130,7 @@ export const roleToString = (role: UserRoleType): UserRoleString => {
 
 export const stringToRole = (roleStr: UserRoleString): UserRoleType => {
   switch (roleStr) {
-    case 'student': return UserRole.STUDENT;
+    case 'admin': return UserRole.ADMIN;           // Updated from 'student'
     case 'university': return UserRole.UNIVERSITY;
     case 'knqa': return UserRole.KNQA;
     default: return UserRole.NONE;

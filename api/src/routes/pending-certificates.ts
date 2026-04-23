@@ -9,7 +9,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { config } from '../config.js';
 // @ts-ignore - JS imports in mixed project
 import { createError } from '../middleware/errorHandler.js';
-import { authenticateWallet, requireKNQARole, requireUniversityRole, type WalletAuthenticatedRequest } from '../middleware/auth.js';
+import { authenticateWallet, requireKNQARole, requireUniversityRole, requireCertificateManagementRole, type WalletAuthenticatedRequest } from '../middleware/auth.js';
 // @ts-ignore - JS imports in mixed project
 import { getCachedContractService } from '../services/contractFactory.js';
 
@@ -103,7 +103,7 @@ const getPendingIssuances = async (req: Request & WalletAuthenticatedRequest, re
             certId: knownCertIds[i],
             universityPrincipal: pending['university-principal'],
             studentName: pending['student-name'],
-            admissionNo: pending['admission-no'],
+            admissionNo: String(pending['admission-no']),
             programme: pending.programme,
             year: parseInt(pending.year),
             grade: pending.grade,
@@ -204,8 +204,84 @@ const getPendingRevocations = async (req: Request & WalletAuthenticatedRequest, 
   }
 };
 
+/**
+ * Get single pending certificate issuance by cert-id (University/KNQA only)
+ * GET /api/pending/issuance/:certId
+ */
+const getSinglePendingIssuance = async (req: Request & WalletAuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { certId } = req.params;
+    
+    if (!certId) {
+      return next(createError(400, 'Certificate ID is required', 'MISSING_CERT_ID'));
+    }
+
+    console.log(`🔍 Fetching pending issuance for cert-id: ${certId}`);
+
+    // Call the contract to get single pending issuance
+    const pendingResult = await fetch(`${config.STACKS_API_URL}/v2/contracts/call-read/${config.CONTRACT_ADDRESS}/${config.CONTRACT_NAME_ROLES}/get-pending-issuance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: req.wallet?.address || config.CONTRACT_ADDRESS, // Use the authenticated user's address
+        arguments: [
+          `"${certId}"` // Single cert-id as string
+        ]
+      })
+    });
+
+    if (!pendingResult.ok) {
+      throw new Error('Failed to fetch pending issuance from blockchain');
+    }
+
+    const pendingData = await pendingResult.json();
+    
+    // Check if the result is ok and has data
+    if (pendingData.result && pendingData.result.type === 'ok' && pendingData.result.value) {
+      const pending = pendingData.result.value;
+      
+      const pendingIssuance: PendingIssuance = {
+        certId: String(certId),
+        universityPrincipal: pending['university-principal'],
+        studentName: pending['student-name'],
+        admissionNo: String(pending['admission-no']),
+        programme: pending.programme,
+        year: parseInt(pending.year),
+        grade: pending.grade,
+        ipfsCid: pending['ipfs-cid'],
+        certHash: pending['cert-hash'],
+        requestedAt: parseInt(pending['requested-at'])
+      };
+
+      console.log(`✅ Found pending issuance for cert-id: ${certId}`);
+
+      res.json({
+        success: true,
+        certId: certId,
+        pending: pendingIssuance,
+        message: `Found pending certificate issuance for ${certId}`
+      });
+    } else {
+      // No pending issuance found
+      res.json({
+        success: true,
+        certId: certId,
+        pending: null,
+        message: `No pending issuance found for certificate ${certId}`
+      });
+    }
+
+  } catch (error) {
+    console.error(`❌ Error fetching pending issuance for ${req.params.certId}:`, error);
+    next(createError(500, 'Failed to fetch pending issuance', 'FETCH_PENDING_ERROR'));
+  }
+};
+
 // Register route handlers
 router.get('/issuances', authenticateWallet, requireKNQARole, getPendingIssuances);
-router.get('/revocations', authenticateWallet, requireUniversityRole, getPendingRevocations);
+router.get('/issuance/:certId', authenticateWallet, requireCertificateManagementRole, getSinglePendingIssuance); // Both University and KNQA can access
+router.get('/revocations', authenticateWallet, requireCertificateManagementRole, getPendingRevocations); // Updated to allow both roles
 
 export default router;

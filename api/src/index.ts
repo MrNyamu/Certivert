@@ -6,7 +6,7 @@ import rateLimit from 'express-rate-limit';
 import type { Server } from 'http';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { checkIPFSConnection, closeIPFSClient } from './services/ipfs.js';
+import { checkIPFSConnection } from './services/ipfs.js';
 import { getBlockchainStatus } from './services/blockchain.js';
 import type { HealthStatus, RateLimitConfig, CorsConfig } from './types/index.js';
 
@@ -226,9 +226,8 @@ async function startServer(): Promise<void> {
 async function gracefulShutdown(signal: string): Promise<void> {
   console.log(`${signal} received. Initiating graceful shutdown...`);
   
-  // Clean up IPFS client connections
-  console.log('Cleaning up IPFS client...');
-  await closeIPFSClient();
+  // Note: We don't close the IPFS client as it's just an HTTP client
+  // and doesn't need explicit cleanup. The IPFS daemon should remain running.
   
   if (server) {
     console.log('Closing HTTP server...');
@@ -275,9 +274,8 @@ process.on('uncaughtException', (err: Error) => {
   if (server && (server as any).listening) {
     gracefulShutdown('UNCAUGHT_EXCEPTION');
   } else {
-    // If no server or server not listening, just clean up IPFS and exit
-    console.log('Server not running, cleaning up and exiting...');
-    closeIPFSClient();
+    // If no server or server not listening, just exit
+    console.log('Server not running, exiting...');
     process.exit(1);
   }
 });
@@ -289,9 +287,8 @@ process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   if (server && (server as any).listening) {
     gracefulShutdown('UNHANDLED_REJECTION');
   } else {
-    // If no server or server not listening, just clean up IPFS and exit
-    console.log('Server not running, cleaning up and exiting...');
-    closeIPFSClient();
+    // If no server or server not listening, just exit
+    console.log('Server not running, exiting...');
     process.exit(1);
   }
 });

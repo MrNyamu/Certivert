@@ -183,14 +183,13 @@ export async function checkIPFSConnection(): Promise<boolean> {
 
 /**
  * Clean up IPFS client
+ * Note: kubo-rpc-client is just an HTTP client and doesn't require explicit cleanup
  */
 export async function closeIPFSClient(): Promise<void> {
   try {
-    if (ipfs && typeof (ipfs as any).stop === 'function') {
-      await (ipfs as any).stop();
-      console.log('IPFS client connection closed');
-    }
+    // Simply reset the client reference - no need to call stop() as it's just an HTTP client
     ipfs = null;
+    console.log('IPFS client reference cleared');
   } catch (error) {
     console.error('Error closing IPFS client:', error);
   }

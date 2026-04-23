@@ -8,7 +8,7 @@
 
 ;; Roles
 (define-constant ROLE-NONE u0)
-(define-constant ROLE-STUDENT u1)
+(define-constant ROLE-ADMIN u1)
 (define-constant ROLE-UNIVERSITY u2)
 (define-constant ROLE-KNQA u3)
 
