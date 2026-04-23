@@ -200,10 +200,119 @@ export class CertivertAPI {
   }
 
   /**
-   * Verify a certificate by ID
+   * Verify a certificate by ID using smart contract
    */
   async verifyCertificate(certId: string): Promise<VerificationResult> {
-    return this.request<VerificationResult>(`/api/verify/${encodeURIComponent(certId)}`);
+    try {
+      // First try smart contract verification
+      const contractResult = await this.verifyFromContract(certId);
+      if (contractResult.success) {
+        return contractResult;
+      }
+      
+      // Fallback to backend API if contract call fails
+      return this.request<VerificationResult>(`/api/verify/${encodeURIComponent(certId)}`);
+    } catch (error) {
+      console.error('Certificate verification failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify certificate directly from smart contract
+   */
+  async verifyFromContract(certId: string): Promise<VerificationResult> {
+    try {
+      // Import wallet service to make contract call
+      const { walletService } = await import('./wallet.js');
+      
+      // Use the existing getCertificateData method which checks both pending and issued certificates
+      const result = await walletService.getCertificateData(certId);
+      
+      if (!result.success || !result.data) {
+        return {
+          success: false,
+          status: 'NOT_FOUND',
+          message: result.message || `Certificate ${certId} not found`,
+          certificate: null,
+          verificationDetails: {
+            blockchainVerified: false,
+            hashVerified: false,
+            ipfsVerified: false
+          }
+        };
+      }
+
+      const certificateData = result.data;
+      
+      // Enhanced certificate status determination
+      let status: 'VALID' | 'REVOKED' | 'NOT_FOUND' | 'TAMPERED';
+      
+      console.log('🔍 Certificate verification analysis:');
+      console.log(`   📋 Certificate ID: ${certId}`);
+      console.log(`   📊 Result status: ${result.status}`);
+      console.log(`   🔢 Certificate status: ${certificateData.status}`);
+      console.log(`   ⏰ Revoked at: ${certificateData.revokedAt}`);
+      console.log(`   📝 Revocation reason: ${certificateData.revocationReason}`);
+      
+      if (result.status === 'pending') {
+        // Pending certificates are not yet valid for public verification
+        console.log('   ❌ Certificate is still pending approval');
+        status = 'NOT_FOUND';
+      } else if (certificateData.status === 200 || certificateData.status === '200') {
+        // Status 200 = issued/active, but check if it was later revoked
+        if (certificateData.revokedAt && certificateData.revokedAt !== 0 && certificateData.revokedAt !== '0') {
+          console.log('   🚫 Certificate was issued but later revoked');
+          status = 'REVOKED';
+        } else {
+          console.log('   ✅ Certificate is valid and active');
+          status = 'VALID';
+        }
+      } else if (certificateData.status === 400 || certificateData.status === '400') {
+        // Status 400 = revoked certificate
+        console.log('   🚫 Certificate status indicates revocation');
+        status = 'REVOKED';
+      } else {
+        console.log(`   ❓ Unknown certificate status: ${certificateData.status}`);
+        status = 'NOT_FOUND';
+      }
+
+      // Format certificate data for frontend
+      const certificate = {
+        id: certId,
+        studentName: certificateData.studentName,
+        admissionNo: certificateData.admissionNo,
+        programme: certificateData.programme,
+        year: certificateData.year,
+        grade: certificateData.grade,
+        ipfsCid: certificateData.ipfsCid,
+        certHash: certificateData.certHash,
+        universityPrincipal: certificateData.universityPrincipal,
+        dateIssued: certificateData.issuedAt ? new Date(certificateData.issuedAt * 1000).toISOString() : new Date().toISOString(),
+        status: certificateData.status,
+        issuedAt: certificateData.issuedAt,
+        revokedAt: certificateData.revokedAt,
+        revocationReason: certificateData.revocationReason
+      };
+
+      return {
+        success: true,
+        status,
+        message: status === 'VALID' ? 'Certificate is valid and verified' : 
+                status === 'REVOKED' ? `Certificate has been revoked${certificateData.revocationReason ? ': ' + certificateData.revocationReason : ''}` : 
+                'Certificate not found',
+        certificate,
+        verificationDetails: {
+          blockchainVerified: true,
+          hashVerified: true, // Assuming hash is valid if found on blockchain
+          ipfsVerified: !!certificateData.ipfsCid
+        }
+      };
+
+    } catch (error) {
+      console.error('Smart contract verification failed:', error);
+      throw new Error(`Contract verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -309,6 +418,7 @@ export class CertivertAPI {
   }> {
     return this.request('/api');
   }
+
 
   /**
    * Get pending certificate issuances (KNQA only)

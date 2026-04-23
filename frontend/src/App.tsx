@@ -25,9 +25,11 @@ import {
 
 // Components
 import UniversityDashboard from './components/dashboards/UniversityDashboard.js';
+import KNQADashboard from './components/dashboards/KNQADashboard.js';
 import PublicVerification from './components/dashboards/PublicVerification.js';
 import ConnectWallet from './components/auth/ConnectWallet.js';
 import SessionValidator from './components/auth/SessionValidator.js';
+import GovernanceRoleManager from './components/admin/GovernanceRoleManager.js';
 
 // Loading Component
 const LoadingScreen: React.FC = () => (
@@ -101,11 +103,11 @@ const DashboardRouter: React.FC = () => {
           navigate('/dashboard/university', { replace: true });
           break;
         case 'knqa':
-          // KNQA uses the same dashboard as university with different permissions
-          navigate('/dashboard/university', { replace: true });
+          // KNQA uses dedicated KNQA dashboard
+          navigate('/dashboard/knqa', { replace: true });
           break;
-        case 'student':
-          navigate('/dashboard/student', { replace: true });
+        case 'none':
+          navigate('/setRole', { replace: true });
           break;
         default:
           console.warn('⚠️ Unknown role, redirecting to verification:', user.role);
@@ -162,6 +164,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/connect" element={<ConnectWallet />} />
       <Route path="/verify" element={<PublicVerification />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Route path='/setRole' element={<GovernanceRoleManager/>} />
       
       {/* Protected Dashboard Routes */}
       <Route 
@@ -176,16 +179,20 @@ const AppRoutes: React.FC = () => {
       <Route 
         path="/dashboard/university" 
         element={
-          <ProtectedRoute requiredRoles={['university', 'knqa']}>
+          <ProtectedRoute requiredRoles={['university']}>
             <UniversityDashboard />
           </ProtectedRoute>
         } 
       />
       
-      {/* Redirect KNQA to university dashboard */}
+      {/* KNQA Dashboard Route */}
       <Route 
         path="/dashboard/knqa" 
-        element={<Navigate to="/dashboard/university" replace />} 
+        element={
+          <ProtectedRoute requiredRoles={['knqa']}>
+            <KNQADashboard />
+          </ProtectedRoute>
+        } 
       />
       
       <Route 

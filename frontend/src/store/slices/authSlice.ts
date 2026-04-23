@@ -359,7 +359,7 @@ const authSlice = createSlice({
         if (state.user) {
           state.user.role = role;
           state.user.roleValue = roleValue;
-          state.user.isStudent = roleValue === 1;
+          state.user.isAdmin = roleValue === 1;      // Changed from isStudent to isAdmin
           state.user.isUniversity = roleValue === 2;
           state.user.isKNQA = roleValue === 3;
           state.user.isActive = roleValue > 0;
@@ -422,8 +422,8 @@ export const selectCanPerformAction = (action: string) => (state: { auth: AuthSt
       return user.isUniversity || user.isKNQA;
     case 'audit_system':
       return user.isKNQA;
-    case 'view_own_certificates':
-      return user.isStudent;
+    case 'manage_roles':
+      return user.isAdmin;
     case 'verify_certificates':
       return true;
     default:
@@ -431,13 +431,13 @@ export const selectCanPerformAction = (action: string) => (state: { auth: AuthSt
   }
 };
 
-export const selectHasRole = (role: 'student' | 'university' | 'knqa') => (state: { auth: AuthState }) => {
+export const selectHasRole = (role: 'admin' | 'university' | 'knqa') => (state: { auth: AuthState }) => {
   const user = state.auth.user;
   if (!user || !state.auth.isConnected) return false;
 
   switch (role) {
-    case 'student':
-      return user.isStudent;
+    case 'admin':
+      return user.isAdmin;
     case 'university':
       return user.isUniversity;
     case 'knqa':

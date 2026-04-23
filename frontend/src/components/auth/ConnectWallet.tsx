@@ -23,6 +23,9 @@ import {
   selectAuthError
 } from '../../store/slices/authSlice.js';
 
+// Import GovernanceRoleManager
+import GovernanceRoleManager from '../admin/GovernanceRoleManager.js';
+
 const ConnectWallet: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
@@ -34,27 +37,27 @@ const ConnectWallet: React.FC = () => {
   const error = useSelector((state: RootState) => selectAuthError(state));
 
 
-  // Auto-navigate when connected
-  useEffect(() => {
-    if (isConnected && user) {
-      // Role-based navigation
-      switch (user.role) {
-        case 'university':
-          navigate('/dashboard/university');
-          break;
-        case 'knqa':
-          navigate('/dashboard/knqa');
-          break;
-        case 'student':
-          navigate('/dashboard/student');
-          break;
-        default:
-          // If no role or unrecognized role, go to verification
-          navigate('/verify');
-          break;
-      }
-    }
-  }, [isConnected, user, navigate]);
+  // Auto-navigate when connected - DISABLED to show GovernanceRoleManager
+  // useEffect(() => {
+  //   if (isConnected && user) {
+  //     // Role-based navigation
+  //     switch (user.role) {
+  //       case 'university':
+  //         navigate('/dashboard/university');
+  //         break;
+  //       case 'knqa':
+  //         navigate('/dashboard/knqa');
+  //         break;
+  //       case 'student':
+  //         navigate('/dashboard/student');
+  //         break;
+  //       default:
+  //         // If no role or unrecognized role, go to verification
+  //         navigate('/verify');
+  //         break;
+  //     }
+  //   }
+  // }, [isConnected, user, navigate]);
 
   // Handle wallet connection
   const handleConnect = async () => {
@@ -71,6 +74,106 @@ const ConnectWallet: React.FC = () => {
   };
 
   const isLoading = connectionStatus === 'connecting';
+
+  // Handle navigation effects at the top level (Rules of Hooks)
+  useEffect(() => {
+    if (isConnected && user) {
+      // University/KNQA users get admin dashboard
+      if (user.role === 'university' || user.role === 'knqa') {
+        navigate('/dashboard/university');
+        return;
+      }
+
+      // Admin role gets GovernanceRoleManager (don't navigate, will be handled by conditional render)
+      if (user.role === 'admin') {
+        // Stay on current page to show GovernanceRoleManager
+        return;
+      }
+
+      // Users with no role get dashboard where DashboardRouter will handle them  
+      if (user.role === 'none' || !user.role) {
+        navigate('/dashboard');
+        return;
+      }
+
+      // Students and other roles get verification screen
+      if (user.role === 'student') {
+        navigate('/verify');
+        return;
+      }
+
+      // For any other cases, redirect to dashboard for proper routing
+      navigate('/dashboard');
+    }
+  }, [isConnected, user, navigate]);
+
+  // If connected, check user role and show appropriate content
+  if (isConnected && user) {
+    // Admin role (u1) gets GovernanceRoleManager
+    if (user.role === 'admin') {
+      return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center py-4">
+              <div className="flex items-center">
+                <h1 className="text-2xl font-bold text-gray-900">
+                  🏛️ Certivert Admin
+                </h1>
+                <span className="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                  ROLE SETUP
+                </span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Connected as</div>
+                  <div className="font-semibold text-gray-900">
+                    {user.address.slice(0, 8)}...{user.address.slice(-6)}
+                  </div>
+                  <div className="text-xs text-gray-400">Current Role: {user.role}</div>
+                </div>
+                <button
+                  onClick={() => navigate('/verify')}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium underline"
+                >
+                  Go to Verification
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <GovernanceRoleManager />
+        </main>
+
+        {/* Footer */}
+        <footer className="bg-white border-t border-gray-200 mt-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="text-center text-sm text-gray-500">
+              <p>Certivert Role Management System</p>
+              <p className="mt-1">
+                Set user roles via wallet-signed transactions to the governance contract
+              </p>
+            </div>
+          </div>
+        </footer>
+      </div>
+      );
+    }
+
+    // For all other connected users, show loading while navigation happens
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-50 flex items-center justify-center relative overflow-hidden">

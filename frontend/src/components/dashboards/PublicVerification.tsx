@@ -115,11 +115,18 @@ const PublicVerification: React.FC = () => {
           description: 'This certificate is authentic and has not been revoked.'
         };
       case 'REVOKED':
+        // Extract revocation reason from verification result message if available
+        const revocationReason = verificationResult?.certificate?.revocationReason || 
+                               (verificationResult?.message?.includes(':') ? 
+                                verificationResult.message.split(':').slice(1).join(':').trim() : null);
+        
         return {
           color: 'red',
           icon: XMarkIcon,
           text: 'Revoked Certificate',
-          description: 'This certificate has been revoked and is no longer valid.'
+          description: revocationReason ? 
+            `This certificate has been revoked. Reason: ${revocationReason}` : 
+            'This certificate has been revoked and is no longer valid.'
         };
       case 'NOT_FOUND':
         return {
@@ -163,6 +170,13 @@ const PublicVerification: React.FC = () => {
             <UserPlusIcon className="h-5 w-5" />
             <span>Connect Wallet</span>
           </button>
+          {/* <button
+            onClick={() => navigate('/setRole')}
+            className="inline-flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            <UserPlusIcon className="h-5 w-5" />
+            <span>Set Roles</span>
+          </button> */}
         </div>
 
         <div className="flex justify-center mb-4">
@@ -272,6 +286,35 @@ const PublicVerification: React.FC = () => {
             <div className="border-t border-gray-200 pt-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Certificate Details</h3>
               
+              {/* Revocation Information - Show prominently for revoked certificates */}
+              {verificationResult.status === 'REVOKED' && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start">
+                    <XMarkIcon className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div className="ml-3">
+                      <h4 className="text-sm font-medium text-red-800 mb-1">Certificate Revocation</h4>
+                      <p className="text-sm text-red-700">
+                        This certificate has been officially revoked and is no longer valid.
+                      </p>
+                      {verificationResult.certificate.revocationReason && (
+                        <div className="mt-2">
+                          <span className="text-sm font-medium text-red-800">Reason: </span>
+                          <span className="text-sm text-red-700">{verificationResult.certificate.revocationReason}</span>
+                        </div>
+                      )}
+                      {verificationResult.certificate.revokedAt && (
+                        <div className="mt-1">
+                          <span className="text-sm font-medium text-red-800">Revoked at: </span>
+                          <span className="text-sm text-red-700">
+                            Block height {verificationResult.certificate.revokedAt}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <div>
@@ -300,13 +343,6 @@ const PublicVerification: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-500">Grade</label>
                     <p className="text-lg text-gray-900">{verificationResult.certificate.grade}</p>
                   </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500">Date Issued</label>
-                    <p className="text-lg text-gray-900">
-                      {new Date(verificationResult.certificate.dateIssued).toLocaleDateString()}
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -314,14 +350,14 @@ const PublicVerification: React.FC = () => {
               {verificationResult.status === 'VALID' && verificationResult.certificate.ipfsCid && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
-                    <button
+                    {/* <button
                       onClick={handleDownload}
                       disabled={loadingStates.loading}
                       className="flex items-center justify-center px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
                     >
                       <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
                       {loadingStates.loading ? 'Downloading...' : 'Download Certificate'}
-                    </button>
+                    </button> */}
                     
                     <button
                       onClick={() => setShowViewer(true)}
@@ -330,6 +366,18 @@ const PublicVerification: React.FC = () => {
                       <DocumentCheckIcon className="h-5 w-5 mr-2" />
                       View Certificate
                     </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Revoked Certificate Notice */}
+              {verificationResult.status === 'REVOKED' && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="text-center p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <XMarkIcon className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                    <p className="text-sm text-red-700 font-medium">
+                      Document viewing and downloads are disabled for revoked certificates
+                    </p>
                   </div>
                 </div>
               )}
@@ -374,8 +422,8 @@ const PublicVerification: React.FC = () => {
         </div>
       )}
 
-      {/* Certificate Viewer Modal */}
-      {showViewer && verificationResult?.certificate && (
+      {/* Certificate Viewer Modal - Only for valid certificates */}
+      {showViewer && verificationResult?.certificate && verificationResult.status === 'VALID' && (
         <CertificateViewer
           certificate={verificationResult.certificate}
           verificationResult={verificationResult}

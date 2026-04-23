@@ -217,19 +217,6 @@ const CertificateViewer: React.FC<CertificateViewerProps> = ({
                   
                   <div>
                     <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Date Issued
-                    </label>
-                    <p className="mt-1 text-sm text-gray-900">
-                      {new Date(certificate.dateIssued).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Certificate ID
                     </label>
                     <p className="mt-1 text-xs text-gray-600 font-mono break-all bg-gray-50 p-2 rounded">
